@@ -1,0 +1,1 @@
+las primeras 4 filas representan la animacion de iddle del personaje, mientras que las siguientes 4 la animacion de movimiento, pero vamos a ignorar la animacion de iddle y enfocarnos en la de movimietno, porque siendo este proyecto un mvp solo necesito que se mueva, y cuando 
