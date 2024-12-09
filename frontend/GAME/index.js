@@ -1,6 +1,16 @@
+//----------------------------------------
+// CONFIGURACIÓN INICIAL DEL CANVAS
+//----------------------------------------
 const canvas = document.querySelector("canvas");
-const ctx = canvas.getContext("2d");//ctx is the context of the canvas
+const ctx = canvas.getContext("2d");
+canvas.width = 800;
+canvas.height = 450;
+ctx.fillStyle = "white";
+ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+//----------------------------------------
+// CONFIGURACIÓN DEL MAPA Y COLISIONES
+//----------------------------------------
 console.log(collisions);
 
 const collisionsMap = [];
@@ -13,18 +23,20 @@ const offset = {
     y: -1145
 };
 
+const velocity = 2;
+//----------------------------------------
+// CLASES
+//----------------------------------------
 class Boundary {
-    // El tamaño base sin zoom
-    static width = 16;  // 48/3
-    static height = 16; // 48/3
+    static width = 16;
+    static height = 16;
     constructor({position}) {
         this.position = position;
-        // El tamaño se ajustará automáticamente con el zoom
         this.width = Boundary.width;
         this.height = Boundary.height;
     }
     draw() {
-        ctx.fillStyle = "rgba(255, 0, 0, 0.2)"; // Rojo semi-transparente para debug
+        ctx.fillStyle = "rgba(255, 0, 0, 0.2)";
         ctx.fillRect(
             this.position.x,
             this.position.y,
@@ -34,6 +46,23 @@ class Boundary {
     }
 }
 
+class Sprite {
+    constructor({position, velocity, image}) {
+        this.position = position;
+        this.image = image;
+    }
+    draw() {
+        ctx.drawImage(
+            this.image,
+            this.position.x,
+            this.position.y
+        );
+    }
+}
+
+//----------------------------------------
+// CONFIGURACIÓN DE LÍMITES (BOUNDARIES)
+//----------------------------------------
 const boundaries = [];
 
 collisionsMap.forEach((row, i) => {
@@ -51,29 +80,21 @@ collisionsMap.forEach((row, i) => {
     });
 });
 
-
-canvas.width = 800; // in the tutorial it was 1024
-canvas.height = 450; // in the tutorial it was 576
-
-ctx.fillStyle = "white";
-ctx.fillRect(0, 0, canvas.width, canvas.height);
-//---------------------------------------Map---------------------------------------
+//----------------------------------------
+// CARGA DE IMÁGENES Y RECURSOS
+//----------------------------------------
 const mapImg = new Image();
 mapImg.src = "img/Level Map.png";
 
 const playerImg = new Image();
 playerImg.src = "img/PlayerChris.png";
 
-// Factor de zoom (1 = tamaño original, 2 = doble tamaño, 0.5 = mitad de tamaño)
 const zoomLevel = 2;
-
-// Declarar gameImages globalmente
 let gameImages;
-let background; // También declaramos background globalmente
-let playerX = 140; // Posición inicial X del jugador
-let playerY = 100; // Posición inicial Y del jugador
+let background;
+let playerX = 140;
+let playerY = 100;
 
-// Función para asegurarnos que ambas imágenes estén cargadas antes de dibujar
 function loadImages(sources, callback) {
     let loadedImages = 0;
     const images = {};
@@ -92,55 +113,19 @@ function loadImages(sources, callback) {
     }
 }
 
-// Definimos nuestras fuentes de imágenes
 const sources = {
     map: "img/Level Map.png",
     player: "img/PlayerChris.png"
 };
 
-// Modificar la carga de imágenes
-loadImages(sources, (images) => {
-    gameImages = images;
-    
-
-    
-    // Crear el sprite background después de que las imágenes estén cargadas
-    background = new Sprite({
-        position: {
-            x: offset.x,
-            y: offset.y
-        },
-        image: gameImages.map
-    });
-    
-    // Desactivar el suavizado
-    ctx.imageSmoothingEnabled = false;
-    // Aplicar el zoom
-    ctx.scale(zoomLevel, zoomLevel);
-    // Iniciar el bucle de actualización
-    Update();
-});
-
-class Sprite {
-    constructor({position, velocity, image}) {// cuando se crea un sprite se le pasa un objeto con las propiedades position, velocity y image, es decir, llamamos al constructor con un objeto
-        this.position = position;
-        this.image = image;
-    }
-    draw() { // este metodo determina que se dibuja en el canvas
-        ctx.drawImage(
-            this.image,
-            this.position.x,
-            this.position.y
-        );
-    }
-}
-
-// Modificamos la función de detección de colisiones
+//----------------------------------------
+// SISTEMA DE COLISIONES
+//----------------------------------------
 function rectangularCollision({rectangle1, rectangle2}) {
-    const leftMargin = 4;    // Margen más pequeño en el lado izquierdo
-    const topMargin = 10;     // Margen más pequeño en la parte superior
-    const rightMargin = -1;   // Margen normal en el lado derecho
-    const bottomMargin = 0;  // Margen normal en la parte inferior
+    const leftMargin = 4;
+    const topMargin = 10;
+    const rightMargin = -1;
+    const bottomMargin = 0;
     
     return (
         rectangle1.position.x + rectangle1.width - rightMargin >= rectangle2.position.x &&
@@ -150,20 +135,49 @@ function rectangularCollision({rectangle1, rectangle2}) {
     );
 }
 
+//----------------------------------------
+// SISTEMA DE CONTROL DE TECLAS
+//----------------------------------------
+const keys = {
+    w: false,
+    s: false,
+    a: false,
+    d: false
+};
+
+window.addEventListener("keydown", (e) => {
+    if (['w', 'a', 's', 'd'].includes(e.key.toLowerCase())) {
+        e.preventDefault();
+        switch (e.key.toLowerCase()) {
+            case "w": keys.w = true; break;
+            case "s": keys.s = true; break;  
+            case "a": keys.a = true; break;
+            case "d": keys.d = true; break;
+        }
+    }
+});
+
+window.addEventListener("keyup", (e) => {
+    switch (e.key.toLowerCase()) {
+        case "w": keys.w = false; break;
+        case "s": keys.s = false; break;  
+        case "a": keys.a = false; break;
+        case "d": keys.d = false; break;
+    }
+});
+
+//----------------------------------------
+// BUCLES DE JUEGO Y ACTUALIZACIÓN
+//----------------------------------------
 function Update() {
-    // Limpiar el canvas
     ctx.clearRect(0, 0, canvas.width / zoomLevel, canvas.height / zoomLevel);
     
     if (gameImages) {
-        // Dibujar el mapa usando el método draw del sprite
         background.draw();
-
-        //dibujar los limites
         boundaries.forEach((boundary) => {
             boundary.draw();
         });
         
-        // Dibujar el jugador
         const spriteWidth = 19;
         const spriteHeight = 20;
         const column = 1;
@@ -181,14 +195,14 @@ function Update() {
             spriteHeight
         );
     }
-    // Movimiento del jugador
-    // if(keys.w) playerY -= 1;
-    // if(keys.s) playerY += 1;
-    // if(keys.a) playerX -= 1;
-    // if(keys.d) playerX += 1;    
 
-    // Movimiento del fondo y boundaries con detección de colisiones
-    let moving = true;
+    const canMove = {
+        up: true,
+        down: true,
+        left: true,
+        right: true
+    };
+
     const player = {
         position: {
             x: playerX + 7,
@@ -198,166 +212,110 @@ function Update() {
         height: 17
     };
 
-    if(keys.w) {
-        for(let i = 0; i < boundaries.length; i++) {
-            const boundary = boundaries[i];
-            if(rectangularCollision({
-                rectangle1: {
-                    ...player,
-                    position: {
-                        x: playerX,
-                        y: playerY - 1
-                    }
-                },
-                rectangle2: boundary
-            })) {
-                moving = false;
-                break;
-            }
+    boundaries.forEach(boundary => {
+        if(rectangularCollision({
+            rectangle1: {
+                ...player,
+                position: {
+                    x: playerX,
+                    y: playerY - velocity
+                }
+            },
+            rectangle2: boundary
+        })) {
+            canMove.up = false;
         }
-        if(moving) {
-            background.position.y += 1;
-            boundaries.forEach(boundary => boundary.position.y += 1);
+        
+        if(rectangularCollision({
+            rectangle1: {
+                ...player,
+                position: {
+                    x: playerX,
+                    y: playerY + velocity
+                }
+            },
+            rectangle2: boundary
+        })) {
+            canMove.down = false;
         }
-    }
+        
+        if(rectangularCollision({
+            rectangle1: {
+                ...player,
+                position: {
+                    x: playerX - velocity,
+                    y: playerY
+                }
+            },
+            rectangle2: boundary
+        })) {
+            canMove.left = false;
+        }
+        
+        if(rectangularCollision({
+            rectangle1: {
+                ...player,
+                position: {
+                    x: playerX + velocity,
+                    y: playerY
+                }
+            },
+            rectangle2: boundary
+        })) {
+            canMove.right = false;
+        }
+    });
 
-    if(keys.s) {
-        for(let i = 0; i < boundaries.length; i++) {
-            const boundary = boundaries[i];
-            if(rectangularCollision({
-                rectangle1: {
-                    ...player,
-                    position: {
-                        x: playerX,
-                        y: playerY + 1
-                    }
-                },
-                rectangle2: boundary
-            })) {
-                moving = false;
-                break;
-            }
-        }
-        if(moving) {
-            background.position.y -= 1;
-            boundaries.forEach(boundary => boundary.position.y -= 1);
-        }
+    if(keys.w && canMove.up) {
+        background.position.y += velocity;
+        boundaries.forEach(boundary => boundary.position.y += velocity);
     }
-
-    if(keys.a) {
-        for(let i = 0; i < boundaries.length; i++) {
-            const boundary = boundaries[i];
-            if(rectangularCollision({
-                rectangle1: {
-                    ...player,
-                    position: {
-                        x: playerX - 1,
-                        y: playerY
-                    }
-                },
-                rectangle2: boundary
-            })) {
-                moving = false;
-                break;
-            }
-        }
-        if(moving) {
-            background.position.x += 1;
-            boundaries.forEach(boundary => boundary.position.x += 1);
-        }
+    
+    if(keys.s && canMove.down) {
+        background.position.y -= velocity;
+        boundaries.forEach(boundary => boundary.position.y -= velocity);
     }
-
-    if(keys.d) {
-        for(let i = 0; i < boundaries.length; i++) {
-            const boundary = boundaries[i];
-            if(rectangularCollision({
-                rectangle1: {
-                    ...player,
-                    position: {
-                        x: playerX + 1,
-                        y: playerY
-                    }
-                },
-                rectangle2: boundary
-            })) {
-                moving = false;
-                break;
-            }
-        }
-        if(moving) {
-            background.position.x -= 1;
-            boundaries.forEach(boundary => boundary.position.x -= 1);
-        }
+    
+    if(keys.a && canMove.left) {
+        background.position.x += velocity;
+        boundaries.forEach(boundary => boundary.position.x += velocity);
+    }
+    
+    if(keys.d && canMove.right) {
+        background.position.x -= velocity;
+        boundaries.forEach(boundary => boundary.position.x -= velocity);
     }
 
     window.requestAnimationFrame(Update);
 }
 
-
-
-//-------------------------------Detectar Teclas---------------------------------------
-
-
-// Objeto para rastrear las teclas presionadas
-const keys = {
-    w: false,
-    s: false,
-    a: false,
-    d: false
-};
-
-// Eventos para detectar cuando se presiona y suelta una tecla
-window.addEventListener("keydown", (e) => {
-    // Prevenir el comportamiento por defecto solo para las teclas que nos interesan
-    if (['w', 'a', 's', 'd'].includes(e.key.toLowerCase())) {
-        e.preventDefault();
-        switch (e.key.toLowerCase()) {
-            case "w":
-                keys.w = true;
-                break;
-            case "s":
-                keys.s = true;
-                break;  
-            case "a":
-                keys.a = true;
-                break;
-            case "d":
-                keys.d = true;
-                break;
-        }
-    }
-});
-
-window.addEventListener("keyup", (e) => {
-    // Manejar el keyup independientemente de otras teclas
-    switch (e.key.toLowerCase()) {
-        case "w":
-            keys.w = false;
-            break;
-        case "s":
-            keys.s = false;
-            break;  
-        case "a":
-            keys.a = false;
-            break;
-        case "d":
-            keys.d = false;
-            break;
-    }
-});
-
-// Función de bucle de juego
 function gameLoop() {
-    // Verificar teclas presionadas
     if (keys.w) console.log("w");
     if (keys.s) console.log("s");
     if (keys.a) console.log("a");
     if (keys.d) console.log("d");
 
-    // Llamar al siguiente frame
     requestAnimationFrame(gameLoop);
 }
 
-// Iniciar el bucle del juego
+//----------------------------------------
+// INICIALIZACIÓN DEL JUEGO
+//----------------------------------------
+loadImages(sources, (images) => {
+    gameImages = images;
+    
+    background = new Sprite({
+        position: {
+            x: offset.x,
+            y: offset.y
+        },
+        image: gameImages.map
+    });
+    
+    ctx.imageSmoothingEnabled = false;
+    ctx.scale(zoomLevel, zoomLevel);
+    Update();
+});
+
 gameLoop();
 
