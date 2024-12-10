@@ -9,17 +9,30 @@ interface ICheckPointNFT {
     function updateCheckpointData(
         uint256 tokenId,
         string memory worldName,
-        uint256 levelNumber,
-        uint256 levelPercentage,
-        uint256 playerScore,
-        uint256 health,
-        uint256 shield,
+        uint16 levelNumber,
+        uint8 levelPercentage,
+        uint128 playerScore,
+        uint16 health,
+        uint16 souls,
         string[] memory weapons,
-        uint256 timePlayed,
-        uint256 kills,
-        string[] memory boosters,
-        string memory imageURI
+        string[] memory items,
+        uint32 timePlayed,
+        uint32 kills,
+        uint16 boosters
     ) external;
+    function mintCheckpoint(
+        string memory worldName,
+        uint16 levelNumber,
+        uint8 levelPercentage,
+        uint128 playerScore,
+        uint16 health,
+        uint16 souls,
+        string[] memory weapons,
+        string[] memory items,
+        uint32 timePlayed,
+        uint32 kills,
+        uint16 boosters
+    ) external returns (uint256);
 }
 
 contract GunnerSRewind is Ownable {
@@ -134,9 +147,9 @@ contract GunnerSRewind is Ownable {
         uint16 souls,
         string[] memory weapons,
         string[] memory items,
-        uint256 timePlayed,
-        uint256 kills,
-        string[] memory boosters,
+        uint32 timePlayed,
+        uint32 kills,
+        uint16 boosters
     ) {
         // Implementation to get current game state
         // This should be implemented based on your game's specific logic
