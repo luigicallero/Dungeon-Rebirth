@@ -692,7 +692,7 @@ class BlueKnight {
         this.y = y;
         this.width = 16;
         this.height = 17;
-        this.speed = 1.5;
+        this.speed = 1;
         
         // Variables para la animación
         this.frameX = 0;
@@ -717,70 +717,66 @@ class BlueKnight {
             y1: 127,
             x2: 466,
             y2: 341,
-            // Añadir offset inicial
             offsetX: 0,
             offsetY: 0
         };
-        this.detectionRange = 100; // Rango de detección
-        this.idealRange = 80;      // Distancia a la que intentará mantenerse
+
+        // Rangos de distancia
+        this.activationRange = 70;    // Rango mínimo (se aleja si el jugador está más cerca)
+        this.detectionRange = 150;     // Rango inicial de detección
+        this.chaseRange = 100;         // Rango a partir del cual persigue
+        this.hasSeenPlayer = false;    // Para mantener al enemigo activo una vez detecta al jugador
         
         console.log('¡BlueKnight ha spawneado!');
-        console.log(`Posición inicial - X: ${x}, Y: ${y}`);
+        //console.log(`Posición inicial - X: ${x}, Y: ${y}`);
     }
     
     update() {
-        // Calcular coordenadas del mundo correctamente
+        // Calcular coordenadas del mundo
         const playerWorldX = -background.position.x + playerX;
         const playerWorldY = -background.position.y + playerY;
         const enemyWorldX = this.x - background.position.x;
         const enemyWorldY = this.y - background.position.y;
         
-        // Mostrar coordenadas del enemigo en el mundo
-        console.log(`BlueKnight - X: ${Math.round(enemyWorldX)}, Y: ${Math.round(enemyWorldY)}`);
-        
         const dx = playerWorldX - enemyWorldX;
         const dy = playerWorldY - enemyWorldY;
         const distance = Math.sqrt(dx * dx + dy * dy);
         
-        let enemySawPlayer = false;
-        // Si el jugador está dentro del rango de detección inicial
+        // Activar el enemigo si el jugador está dentro del rango de detección
         if (distance <= this.detectionRange) {
-            enemySawPlayer = true;
-        }
-        // Variable estática para mantener el estado de persecución
-        if (!this.hasSeenPlayer && enemySawPlayer) {
             this.hasSeenPlayer = true;
         }
 
-        // Si el jugador ha sido visto alguna vez, perseguir siempre
+        // Si el enemigo está activo, manejar el comportamiento según la distancia
         if (this.hasSeenPlayer) {
-            // Calcular la dirección hacia el jugador
             const angle = Math.atan2(dy, dx);
             
-            // Si está más cerca que el rango ideal, alejarse
-            if (distance < this.idealRange) {
+            // Muy cerca (menos de 100 píxeles) - Alejarse
+            if (distance < this.activationRange) {
                 this.x -= Math.cos(angle) * this.speed;
                 this.y -= Math.sin(angle) * this.speed;
-                // Actualizar dirección de sprite según el movimiento
+                // Animación alejándose
                 if (Math.abs(dx) > Math.abs(dy)) {
                     this.frameY = dx > 0 ? 6 : 5; // izquierda : derecha
                 } else {
                     this.frameY = dy > 0 ? 4 : 7; // abajo : arriba
                 }
             }
-            // Si está más lejos que el rango ideal, acercarse
-            else if (distance > this.idealRange) {
+            // Muy lejos (más de 300 píxeles) - Perseguir
+            else if (distance > this.chaseRange) {
+                // Cambié la dirección del movimiento para perseguir
                 this.x += Math.cos(angle) * this.speed;
                 this.y += Math.sin(angle) * this.speed;
-                // Actualizar dirección de sprite según el movimiento
+                // Ajusté las animaciones para la persecución
                 if (Math.abs(dx) > Math.abs(dy)) {
                     this.frameY = dx > 0 ? 5 : 6; // derecha : izquierda
                 } else {
                     this.frameY = dy > 0 ? 7 : 4; // arriba : abajo
                 }
             }
-            // Si está en el rango ideal, quedarse quieto pero mirando al jugador
+            // Distancia ideal (entre 100 y 300 píxeles) - Quedarse quieto
             else {
+                // Solo actualizar la dirección a la que mira
                 if (Math.abs(dx) > Math.abs(dy)) {
                     this.frameY = dx > 0 ? 1 : 2; // derecha : izquierda (idle)
                 } else {
@@ -788,6 +784,7 @@ class BlueKnight {
                 }
             }
         }
+        
         // Actualizar animación
         this.frameTimer++;
         if (this.frameTimer >= this.frameDelay) {
