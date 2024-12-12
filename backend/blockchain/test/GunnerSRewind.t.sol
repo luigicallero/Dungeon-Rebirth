@@ -50,7 +50,6 @@ contract GunnerSRewindTest is Test {
         // This will depend on how you implement the CheckPointNFT contract
     }
 
-
     function testOnlyOwnerCanSetGameOperator() public {
         vm.expectRevert();
         vm.startPrank(player);

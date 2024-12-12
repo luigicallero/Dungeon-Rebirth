@@ -148,6 +148,7 @@ contract GunnerSRewind is Ownable {
     }
 
     function setCurrentGameState(
+        address player,
         string memory worldName,
         uint16 levelNumber,
         uint8 levelPercentage,
@@ -160,7 +161,7 @@ contract GunnerSRewind is Ownable {
         uint32 kills,
         uint16 boosters) external onlyOwner (
     ) {
-        playerGameStates[msg.sender] = GameState({
+        playerGameStates[player] = GameState({
             worldName: worldName,
             levelNumber: levelNumber,
             levelPercentage: levelPercentage,
@@ -173,6 +174,9 @@ contract GunnerSRewind is Ownable {
             kills: kills,
             boosters: boosters
         });
+    
+        // Immediately trigger the checkpoint update
+        mintCheckpoint(tokenId);
     }
 
     // Events
