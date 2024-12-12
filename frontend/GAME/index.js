@@ -24,8 +24,10 @@ ctx.fillRect(0, 0, canvas.width, canvas.height);
 // Variables globales
 const texts = []; // Array para almacenar textos en pantalla
 let isGameOver = false;
-let timeBeforeRespawn = 0;
+let timeBeforeRespawn = 180; // Modifica este valor para cambiar el tiempo de respawn (60 frames = 1 segundo)
+const TOTAL_GAME_OVER_FRAMES = 11; // Total de frames en la animación de Game Over
 let gameOverScreen = null;
+let playerDamageFrames = 0; // Contador para los frames de daño
 
 const gameObjects = {
     background: null, // Se inicializará después
@@ -34,6 +36,8 @@ const gameObjects = {
     blueKnights: [],
     // Aquí podemos añadir más tipos de objetos en el futuro
 };
+
+const bullets = [];
 
 // Clase base para todos los objetos del juego
 class GameObject {
@@ -315,14 +319,15 @@ function Update() {
         if (timeBeforeRespawn > 0) {
             timeBeforeRespawn--;
             
-            const totalFrames = 11;
-            const frameIndex = Math.floor((500 - timeBeforeRespawn) / (500 / totalFrames));
+            // Calcular el frame actual basado en el tiempo restante
+            const frameIndex = Math.floor(
+                (1 - timeBeforeRespawn / ORIGINAL_TIME) * TOTAL_GAME_OVER_FRAMES
+            );
             
             const row = Math.floor(frameIndex / 3);
             const col = frameIndex % 3;
             
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            
             ctx.drawImage(
                 gameImages.gameOver,
                 col * (gameImages.gameOver.width / 3),
@@ -501,6 +506,53 @@ function Update() {
                 knight.update();
                 knight.draw(ctx);
             });
+            
+            // Actualizar y dibujar balas
+            for (let i = bullets.length - 1; i >= 0; i--) {
+                bullets[i].update();
+                
+                // Verificar si la bala golpea al jugador
+                if (bulletHitPlayer(bullets[i])) {
+                    playerHealth.takeDamage(1);
+                    playerDamageFrames = 2; // Activar frames de daño
+                    bullets.splice(i, 1);
+                    continue;
+                }
+                
+                // Verificar colisiones con boundaries
+                let bulletHitBoundary = false;
+                
+                // Verificar colisiones con paredes normales
+                for (const boundary of gameObjects.boundaries) {
+                    if (bulletCollision(bullets[i], boundary)) {
+                        bulletHitBoundary = true;
+                        break;
+                    }
+                }
+                
+                // Verificar colisiones con puertas
+                if (!bulletHitBoundary && isPlayerInBattle) {
+                    for (const door of gameObjects.doorBoundaries) {
+                        if (bulletCollision(bullets[i], door)) {
+                            bulletHitBoundary = true;
+                            break;
+                        }
+                    }
+                }
+                
+                // Si la bala golpeó algo o está muy lejos, eliminarla
+                const distanceFromPlayer = Math.hypot(
+                    bullets[i].x - playerX,
+                    bullets[i].y - playerY
+                );
+                
+                if (bulletHitBoundary || distanceFromPlayer > 500) {
+                    bullets.splice(i, 1);
+                    continue;
+                }
+                
+                bullets[i].draw(ctx);
+            }
         }
         
         const spriteWidth = 19;
@@ -535,22 +587,29 @@ function Update() {
 
         // Determinar fila y columna del sprite
         let row, column;
-        switch (lastDirection) {
-            case 'left':
-                row = 6;
-                break;
-            case 'right':
-                row = 7;
-                break;
-            case 'up':
-                row = 4;
-                break;
-            case 'down':
-                row = 5;
-                break;
+        if (playerDamageFrames > 0) {
+            // Si está en frames de daño, usar la novena fila (índice 8)
+            row = 8;
+            column = 1; // Frame estático
+            playerDamageFrames--; // Decrementar contador
+        } else {
+            // Animación normal
+            switch (lastDirection) {
+                case 'left':
+                    row = 6;
+                    break;
+                case 'right':
+                    row = 7;
+                    break;
+                case 'up':
+                    row = 4;
+                    break;
+                case 'down':
+                    row = 5;
+                    break;
+            }
+            column = isMoving ? currentFrame : 1;
         }
-        
-        column = isMoving ? currentFrame : 1;
 
         ctx.drawImage(
             gameImages.player,
@@ -835,6 +894,14 @@ class BlueKnight extends GameObject {
         this.currentEvasionDirection = null;
         this.directionChangeTimer = 0;
         this.directionChangeCooldown = 30; // Frames antes de poder cambiar de dirección
+        
+        // Añadir variables para el disparo
+        this.shootTimer = 0; // Frames antes de poder disparar
+        this.shootInterval = 70; // Disparar cada 26 frames
+        
+        // Cargar imagen de la bala
+        this.bulletImage = new Image();
+        this.bulletImage.src = 'img/bullet.png';
     }
     
     update() {
@@ -853,6 +920,13 @@ class BlueKnight extends GameObject {
 
         if (this.hasSeenPlayer) {
             this.handleMovement(distance, dx, dy);
+            
+            // Solo disparar si el enemigo está activo y en rango
+            this.shootTimer++;
+            if (this.shootTimer >= this.shootInterval && distance <= this.detectionRange) {
+                this.shoot();
+                this.shootTimer = 0;
+            }
         } else {
             // Animación inicial antes de detectar al jugador
             this.setIdleAnimation(dx, dy);
@@ -983,6 +1057,26 @@ class BlueKnight extends GameObject {
         super.moveWithMap(dx, dy);
         // No necesitamos actualizar this.position ya que usamos x,y directamente
     }
+    
+    shoot() {
+        const playerWorldX = -background.position.x + playerX;
+        const playerWorldY = -background.position.y + playerY;
+        const enemyWorldX = this.x - background.position.x;
+        const enemyWorldY = this.y - background.position.y;
+        
+        // Calcular dirección hacia el jugador
+        const dx = playerWorldX - enemyWorldX;
+        const dy = playerWorldY - enemyWorldY;
+        const angle = Math.atan2(dy, dx);
+        
+        // Crear nueva bala
+        bullets.push(new Bullet(
+            this.x + this.width/2,
+            this.y + this.height/2,
+            angle,
+            this.bulletImage
+        ));
+    }
 }
 
 //----------------------------------------
@@ -1051,7 +1145,6 @@ class HealthBar {
         
         if (this.currentHealth <= 0) {
             isGameOver = true;
-            timeBeforeRespawn = 500;
         }
     }
 
@@ -1070,6 +1163,7 @@ function resetGame() {
     isGameOver = false;
     isPlayerInBattle = false;
     playerHealth.currentHealth = playerHealth.maxHealth;
+    timeBeforeRespawn = ORIGINAL_TIME; // Restaurar al valor original
     
     // Reiniciar posición del mapa
     offset.x = 100;
@@ -1089,6 +1183,10 @@ function resetGame() {
         room.isCleared = false;
         room.isActive = false;
     });
+    
+    // Limpiar array de balas
+    bullets.length = 0;
+    playerDamageFrames = 0;
 }
 
 // Modificar la función que mueve los objetos cuando el jugador se mueve
@@ -1100,4 +1198,98 @@ function moveAllObjects(dx, dy) {
             objectGroup.moveWithMap(dx, dy);
         }
     });
+    
+    // Mover las balas con el mapa
+    bullets.forEach(bullet => bullet.moveWithMap(dx, dy));
 }
+
+//----------------------------------------
+// SISTEMA DE COLISIONES DE BALAS
+//----------------------------------------
+function bulletCollision(bullet, boundary) {
+    return (
+        bullet.x + bullet.width >= boundary.position.x &&
+        bullet.x <= boundary.position.x + boundary.width &&
+        bullet.y + bullet.height >= boundary.position.y &&
+        bullet.y <= boundary.position.y + boundary.height
+    );
+}
+
+//----------------------------------------
+// CLASE BULLET
+//----------------------------------------
+class Bullet extends GameObject {
+    constructor(x, y, angle, image) {
+        super(x, y);
+        this.speed = 1.5;
+        this.angle = angle;
+        this.image = image;
+        this.width = 10;
+        this.height = 6;
+        
+        // Calcular velocidades basadas en el ángulo
+        this.vx = Math.cos(angle) * this.speed;
+        this.vy = Math.sin(angle) * this.speed;
+    }
+    
+    //----------------------------------------
+    // ACTUALIZACIÓN DE LA BALA
+    //----------------------------------------
+    update() {
+        this.x += this.vx;
+        this.y += this.vy;
+    }
+    
+    //----------------------------------------
+    // RENDERIZADO DE LA BALA
+    //----------------------------------------
+    draw(ctx) {
+        // Guardar el contexto actual
+        ctx.save();
+        
+        // Trasladar al centro de la bala
+        ctx.translate(this.x + this.width/2, this.y + this.height/2);
+        
+        // Rotar según el ángulo
+        ctx.rotate(this.angle);
+        
+        // Dibujar la bala centrada
+        ctx.drawImage(
+            this.image,
+            -this.width/2,
+            -this.height/2,
+            this.width,
+            this.height
+        );
+        
+        // Restaurar el contexto
+        ctx.restore();
+    }
+    
+    //----------------------------------------
+    // MOVIMIENTO CON EL MAPA
+    //----------------------------------------
+    moveWithMap(dx, dy) {
+        super.moveWithMap(dx, dy);
+    }
+}
+
+// Primero, añadamos una función para detectar colisiones entre balas y jugador
+function bulletHitPlayer(bullet) {
+    const playerHitbox = {
+        x: playerX + 7,      // Mismo offset que usamos para otras colisiones
+        y: playerY + 8,
+        width: 12,           // Mismo tamaño que usamos para otras colisiones
+        height: 17
+    };
+    
+    return (
+        bullet.x + bullet.width >= playerHitbox.x &&
+        bullet.x <= playerHitbox.x + playerHitbox.width &&
+        bullet.y + bullet.height >= playerHitbox.y &&
+        bullet.y <= playerHitbox.y + playerHitbox.height
+    );
+}
+
+// Al inicio del juego, guardar el tiempo original
+const ORIGINAL_TIME = timeBeforeRespawn;
