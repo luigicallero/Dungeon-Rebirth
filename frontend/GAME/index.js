@@ -246,7 +246,7 @@ const sources = {
     map: "img/Level Map.png",
     player: "img/PlayerChris.png",
     gameOver: "img/UI/GameOverScreen.png",
-    health: "img/UI/health.png"
+    //health: "img/UI/health.png"
 };
 
 //----------------------------------------
@@ -496,7 +496,6 @@ function Update() {
                 doorBoundary.draw();
             });
             
-            // Actualizar y dibujar todos los caballeros
             gameObjects.blueKnights.forEach(knight => {
                 knight.update();
                 knight.draw(ctx);
@@ -563,9 +562,6 @@ function Update() {
             spriteWidth,
             spriteHeight
         );
-
-        // Dibujar la barra de vida (siempre visible)
-        playerHealth.draw(ctx);
     }
 
     // Actualizar la posición de todos los caballeros cuando el jugador se mueve
@@ -854,7 +850,7 @@ class BlueKnight extends GameObject {
         if (this.hasSeenPlayer) {
             this.handleMovement(distance, dx, dy);
         } else {
-            // Animaci��n inicial antes de detectar al jugador
+            // Animación inicial antes de detectar al jugador
             this.setIdleAnimation(dx, dy);
         }
         
@@ -1012,37 +1008,11 @@ class HealthBar {
     constructor() {
         this.maxHealth = 10;
         this.currentHealth = this.maxHealth;
-        // Eliminar la carga individual de la imagen
-        // this.sprite = new Image();
-        // this.sprite.src = 'img/UI/health.png';
-        
-        // Dimensiones originales de cada frame
         this.frameWidth = 39;
         this.frameHeight = 6;
-        
-        // Factor de escala para la barra de vida
         this.scale = 2;
-        
-        // Posición en pantalla (considerando el zoom y el nuevo tamaño)
         this.x = 10 / zoomLevel;
         this.y = 10 / zoomLevel;
-    }
-
-    draw(ctx) {
-        // Calcular qué frame mostrar (10 - vida actual)
-        const frameIndex = this.maxHealth - this.currentHealth;
-        
-        ctx.drawImage(
-            gameImages.health,    // Usar la imagen precargada
-            frameIndex * this.frameWidth,
-            0,
-            this.frameWidth,
-            this.frameHeight,
-            this.x,
-            this.y,
-            this.frameWidth * this.scale,
-            this.frameHeight * this.scale
-        );
     }
 
     takeDamage(amount) {
