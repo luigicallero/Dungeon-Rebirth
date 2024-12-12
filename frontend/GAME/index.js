@@ -23,6 +23,45 @@ ctx.fillRect(0, 0, canvas.width, canvas.height);
 
 // Variables globales
 const texts = []; // Array para almacenar textos en pantalla
+let isGameOver = false;
+let timeBeforeRespawn = 0;
+let gameOverScreen = null;
+
+const gameObjects = {
+    background: null, // Se inicializará después
+    boundaries: [],
+    doorBoundaries: [],
+    blueKnights: [],
+    // Aquí podemos añadir más tipos de objetos en el futuro
+};
+
+// Clase base para todos los objetos del juego
+class GameObject {
+    constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.originalX = x;
+        this.originalY = y;
+    }
+
+    update() {
+        // Método a ser sobrescrito por las clases hijas
+    }
+
+    draw() {
+        // Método a ser sobrescrito por las clases hijas
+    }
+
+    reset() {
+        this.x = this.originalX;
+        this.y = this.originalY;
+    }
+
+    moveWithMap(dx, dy) {
+        this.x += dx;
+        this.y += dy;
+    }
+}
 
 //----------------------------------------
 // CONFIGURACIÓN DEL MAPA Y COLISIONES
@@ -43,14 +82,29 @@ let isPlayerInBattle = false;
 //----------------------------------------
 // CLASES
 //----------------------------------------
-class Boundary {
+class Boundary extends GameObject {
     static width = 16;
     static height = 16;
+    
     constructor({position}) {
-        this.position = position;
+        super(position.x, position.y);
         this.width = Boundary.width;
         this.height = Boundary.height;
+        this.position = position; // Mantener compatibilidad con código existente
     }
+
+    moveWithMap(dx, dy) {
+        super.moveWithMap(dx, dy);
+        this.position.x = this.x;
+        this.position.y = this.y;
+    }
+
+    reset() {
+        super.reset();
+        this.position.x = this.originalX;
+        this.position.y = this.originalY;
+    }
+
     draw() {
         ctx.fillStyle = "rgba(255, 0, 0, 0.0)";
         ctx.fillRect(
@@ -62,14 +116,29 @@ class Boundary {
     }
 }
 
-class DoorBoundary {
+class DoorBoundary extends GameObject {
     static width = 16;
     static height = 16;
+    
     constructor({position}) {
-        this.position = position;
+        super(position.x, position.y);
         this.width = DoorBoundary.width;
         this.height = DoorBoundary.height;
+        this.position = position; // Mantener compatibilidad con código existente
     }
+
+    moveWithMap(dx, dy) {
+        super.moveWithMap(dx, dy);
+        this.position.x = this.x;
+        this.position.y = this.y;
+    }
+
+    reset() {
+        super.reset();
+        this.position.x = this.originalX;
+        this.position.y = this.originalY;
+    }
+
     draw() {
         ctx.fillStyle = "rgba(255, 0, 0, 0.5)";
         ctx.fillRect(
@@ -81,13 +150,14 @@ class DoorBoundary {
     }
 }
 
-
-
-class Sprite {
-    constructor({position, velocity, image}) {
+// Modificar la clase Sprite para heredar de GameObject
+class Sprite extends GameObject {
+    constructor({position, image}) {
+        super(position.x, position.y);
         this.position = position;
         this.image = image;
     }
+
     draw() {
         ctx.drawImage(
             this.image,
@@ -95,24 +165,33 @@ class Sprite {
             this.position.y
         );
     }
+
+    moveWithMap(dx, dy) {
+        super.moveWithMap(dx, dy);
+        this.position.x = this.x;
+        this.position.y = this.y;
+    }
+
+    reset() {
+        super.reset();
+        this.position.x = this.originalX;
+        this.position.y = this.originalY;
+    }
 }
 
 //----------------------------------------
 // CONFIGURACIÓN DE LÍMITES (BOUNDARIES)
 //----------------------------------------
-const boundaries = [];
-
 collisionsMap.forEach((row, i) => {
     row.forEach((symbol, j) => {
         if (symbol === 257) {
-            boundaries.push(
-                new Boundary({
+            const boundary = new Boundary({
                 position: {
                     x: j * Boundary.width + offset.x,
                     y: i * Boundary.height + offset.y
                 }
-                })
-            )
+            });
+            gameObjects.boundaries.push(boundary);
         }
     });
 });
@@ -122,7 +201,8 @@ const doorBoundaries = [];
 doorCollisionsMap.forEach((row, i) => {
     row.forEach((symbol, j) => {
         if (symbol === 257) {
-            doorBoundaries.push(new DoorBoundary({position: {x: j * DoorBoundary.width + offset.x, y: i * DoorBoundary.height + offset.y}}));
+            const doorBoundary = new DoorBoundary({position: {x: j * DoorBoundary.width + offset.x, y: i * DoorBoundary.height + offset.y}});
+            gameObjects.doorBoundaries.push(doorBoundary);
         }
     });
 });
@@ -164,7 +244,8 @@ function loadImages(sources, callback) {
 
 const sources = {
     map: "img/Level Map.png",
-    player: "img/PlayerChris.png"
+    player: "img/PlayerChris.png",
+    gameOver: "img/UI/GameOverScreen.png"
 };
 
 //----------------------------------------
@@ -195,6 +276,9 @@ const keys = {
 };
 
 window.addEventListener("keydown", (e) => {
+    // Si el juego está en game over, ignorar inputs
+    if (isGameOver) return;
+
     if (['w', 'a', 's', 'd'].includes(e.key.toLowerCase())) {
         e.preventDefault();
         switch (e.key.toLowerCase()) {
@@ -206,6 +290,10 @@ window.addEventListener("keydown", (e) => {
     }
     if (e.key.toLowerCase() === 'e') {
         isPlayerInBattle = !isPlayerInBattle; // Alterna entre true y false
+        playerHealth.takeDamage(1);
+    }
+    if (e.key.toLowerCase() === 'q') {
+        playerHealth.heal(1);
     }
 });
 
@@ -222,12 +310,43 @@ window.addEventListener("keyup", (e) => {
 // BUCLES DE JUEGO Y ACTUALIZACIÓN
 //----------------------------------------
 function Update() {
+    if (isGameOver) {
+        if (timeBeforeRespawn > 0) {
+            timeBeforeRespawn--;
+            
+            const totalFrames = 11;
+            const frameIndex = Math.floor((500 - timeBeforeRespawn) / (500 / totalFrames));
+            
+            const row = Math.floor(frameIndex / 3);
+            const col = frameIndex % 3;
+            
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            ctx.drawImage(
+                gameImages.gameOver,
+                col * (gameImages.gameOver.width / 3),
+                row * (gameImages.gameOver.height / 4),
+                gameImages.gameOver.width / 3,
+                gameImages.gameOver.height / 4,
+                0,
+                0,
+                canvas.width / zoomLevel,
+                canvas.height / zoomLevel
+            );
+        } else {
+            resetGame();
+        }
+        
+        window.requestAnimationFrame(Update);
+        return;
+    }
+    
     // Calcular las coordenadas del mundo
     const worldX = -background.position.x + playerX;
     const worldY = -background.position.y + playerY;
     
     // Mostrar coordenadas del jugador en consola
-    console.log(`Coordenadas del jugador - X: ${Math.round(worldX)}, Y: ${Math.round(worldY)}`);
+    //console.log(`Coordenadas del jugador - X: ${Math.round(worldX)}, Y: ${Math.round(worldY)}`);
     
     ctx.clearRect(0, 0, canvas.width / zoomLevel, canvas.height / zoomLevel);
     
@@ -249,7 +368,7 @@ function Update() {
     };
 
     // Verificar colisiones
-    boundaries.forEach(boundary => {
+    gameObjects.boundaries.forEach(boundary => {
         if(rectangularCollision({
             rectangle1: {
                 ...player,
@@ -305,7 +424,7 @@ function Update() {
 
     if (isPlayerInBattle) {
         // Añadir verificación de colisiones para puertas
-        doorBoundaries.forEach(doorBoundary => {
+        gameObjects.doorBoundaries.forEach(doorBoundary => {
             if(rectangularCollision({
                 rectangle1: {
                     ...player,
@@ -365,20 +484,22 @@ function Update() {
     }
 
     if (gameImages) {
-        background.draw();
-        boundaries.forEach((boundary) => {
+        gameObjects.background.draw();
+        gameObjects.boundaries.forEach((boundary) => {
             boundary.draw();
         });
 
-        // Solo dibujar las puertas si el jugador está en batalla
+        // Solo dibujar las puertas y caballeros si el jugador está en batalla
         if (isPlayerInBattle) {
-            doorBoundaries.forEach((doorBoundary) => {
+            gameObjects.doorBoundaries.forEach((doorBoundary) => {
                 doorBoundary.draw();
             });
             
-            //============= Actualizar y dibujar el caballero solo en batalla =====================
-            blueKnight.update();
-            blueKnight.draw(ctx);
+            // Actualizar y dibujar todos los caballeros
+            gameObjects.blueKnights.forEach(knight => {
+                knight.update();
+                knight.draw(ctx);
+            });
         }
         
         const spriteWidth = 19;
@@ -441,38 +562,26 @@ function Update() {
             spriteWidth,
             spriteHeight
         );
+
+        // Dibujar la barra de vida (siempre visible)
+        playerHealth.draw(ctx);
     }
 
+    // Actualizar la posición de todos los caballeros cuando el jugador se mueve
     if(keys.w && canMove.up) {
-        background.position.y += velocity;
-        boundaries.forEach(boundary => boundary.position.y += velocity);
-        doorBoundaries.forEach(doorBoundary => doorBoundary.position.y += velocity);
-        blueKnight.y += velocity;
-        blueKnight.patrolArea.offsetY += velocity;
+        moveAllObjects(0, velocity);
     }
     
     if(keys.s && canMove.down) {
-        background.position.y -= velocity;
-        boundaries.forEach(boundary => boundary.position.y -= velocity);
-        doorBoundaries.forEach(doorBoundary => doorBoundary.position.y -= velocity);
-        blueKnight.y -= velocity;
-        blueKnight.patrolArea.offsetY -= velocity;
+        moveAllObjects(0, -velocity);
     }
     
     if(keys.a && canMove.left) {
-        background.position.x += velocity;
-        boundaries.forEach(boundary => boundary.position.x += velocity);
-        doorBoundaries.forEach(doorBoundary => doorBoundary.position.x += velocity);
-        blueKnight.x += velocity;
-        blueKnight.patrolArea.offsetX += velocity;
+        moveAllObjects(velocity, 0);
     }
     
     if(keys.d && canMove.right) {
-        background.position.x -= velocity;
-        boundaries.forEach(boundary => boundary.position.x -= velocity);
-        doorBoundaries.forEach(doorBoundary => doorBoundary.position.x -= velocity);
-        blueKnight.x -= velocity;
-        blueKnight.patrolArea.offsetX -= velocity;
+        moveAllObjects(-velocity, 0);
     }
 
     // Añadir la verificación de entrada a la sala
@@ -504,12 +613,20 @@ function gameLoop() {
 loadImages(sources, (images) => {
     gameImages = images;
     
-    background = new Sprite({
+    gameObjects.background = new Sprite({
         position: {
             x: offset.x,
             y: offset.y
         },
         image: gameImages.map
+    });
+    
+    // Ya no necesitamos la variable background global
+    background = gameObjects.background;
+    
+    gameObjects.boundaries.forEach(boundary => {
+        boundary.originalX = boundary.position.x;
+        boundary.originalY = boundary.position.y;
     });
     
     ctx.imageSmoothingEnabled = false;
@@ -686,53 +803,40 @@ class Enemy {
 //----------------------------------------
 // CLASE BLUEKNIGHT (ENEMIGO)
 //----------------------------------------
-class BlueKnight {
+class BlueKnight extends GameObject {
     constructor(x, y) {
-        this.x = x;
-        this.y = y;
+        super(x, y);
+        // Posición y dimensiones
         this.width = 16;
         this.height = 17;
         this.speed = 1;
         
-        // Variables para la animación
+        // Animación
         this.frameX = 0;
         this.frameY = 0;
         this.frameCount = 8;
         this.frameDelay = 4;
         this.frameTimer = 0;
         
-        // Variables para el movimiento
-        this.isMoving = false;
-        this.direction = 'right';
-        this.moveTimer = 0;
-        this.moveInterval = 120;
+        // Estado
+        this.hasSeenPlayer = false;
         
-        // Cargar sprite
+        // Rangos de comportamiento
+        this.activationRange = 60;    // Se aleja si el jugador está más cerca
+        this.chaseRange = 100;        // Rango para perseguir
+        this.detectionRange = 150;    // Rango inicial de detección
+        
+        // Sprite
         this.sprite = new Image();
         this.sprite.src = 'img/BlueKnight.png';
         
-        // Área de patrulla con posición inicial
-        this.patrolArea = {
-            x1: 254,
-            y1: 127,
-            x2: 466,
-            y2: 341,
-            offsetX: 0,
-            offsetY: 0
-        };
-
-        // Rangos de distancia
-        this.activationRange = 70;    // Rango mínimo (se aleja si el jugador está más cerca)
-        this.detectionRange = 150;     // Rango inicial de detección
-        this.chaseRange = 100;         // Rango a partir del cual persigue
-        this.hasSeenPlayer = false;    // Para mantener al enemigo activo una vez detecta al jugador
-        
-        console.log('¡BlueKnight ha spawneado!');
-        //console.log(`Posición inicial - X: ${x}, Y: ${y}`);
+        // Añadir variable para el movimiento aleatorio
+        this.currentEvasionDirection = null;
+        this.directionChangeTimer = 0;
+        this.directionChangeCooldown = 30; // Frames antes de poder cambiar de dirección
     }
     
     update() {
-        // Calcular coordenadas del mundo
         const playerWorldX = -background.position.x + playerX;
         const playerWorldY = -background.position.y + playerY;
         const enemyWorldX = this.x - background.position.x;
@@ -742,50 +846,117 @@ class BlueKnight {
         const dy = playerWorldY - enemyWorldY;
         const distance = Math.sqrt(dx * dx + dy * dy);
         
-        // Activar el enemigo si el jugador está dentro del rango de detección
         if (distance <= this.detectionRange) {
             this.hasSeenPlayer = true;
         }
 
-        // Si el enemigo está activo, manejar el comportamiento según la distancia
         if (this.hasSeenPlayer) {
-            const angle = Math.atan2(dy, dx);
-            
-            // Muy cerca (menos de 100 píxeles) - Alejarse
-            if (distance < this.activationRange) {
-                this.x -= Math.cos(angle) * this.speed;
-                this.y -= Math.sin(angle) * this.speed;
-                // Animación alejándose
-                if (Math.abs(dx) > Math.abs(dy)) {
-                    this.frameY = dx > 0 ? 6 : 5; // izquierda : derecha
-                } else {
-                    this.frameY = dy > 0 ? 4 : 7; // abajo : arriba
-                }
-            }
-            // Muy lejos (más de 300 píxeles) - Perseguir
-            else if (distance > this.chaseRange) {
-                // Cambié la dirección del movimiento para perseguir
-                this.x += Math.cos(angle) * this.speed;
-                this.y += Math.sin(angle) * this.speed;
-                // Ajusté las animaciones para la persecución
-                if (Math.abs(dx) > Math.abs(dy)) {
-                    this.frameY = dx > 0 ? 5 : 6; // derecha : izquierda
-                } else {
-                    this.frameY = dy > 0 ? 7 : 4; // arriba : abajo
-                }
-            }
-            // Distancia ideal (entre 100 y 300 píxeles) - Quedarse quieto
-            else {
-                // Solo actualizar la dirección a la que mira
-                if (Math.abs(dx) > Math.abs(dy)) {
-                    this.frameY = dx > 0 ? 1 : 2; // derecha : izquierda (idle)
-                } else {
-                    this.frameY = dy > 0 ? 0 : 3; // abajo : arriba (idle)
-                }
-            }
+            this.handleMovement(distance, dx, dy);
+        } else {
+            // Animación inicial antes de detectar al jugador
+            this.setIdleAnimation(dx, dy);
         }
         
-        // Actualizar animación
+        this.updateAnimation();
+    }
+    
+    handleMovement(distance, dx, dy) {
+        const angle = Math.atan2(dy, dx);
+        let moveX = 0;
+        let moveY = 0;
+        let isMoving = false;
+
+        if (distance < this.activationRange) {
+            // Alejándose del jugador de manera aleatoria
+            this.directionChangeTimer++;
+            
+            // Elegir nueva dirección si no hay una o si pasó el cooldown
+            if (!this.currentEvasionDirection || this.directionChangeTimer >= this.directionChangeCooldown) {
+                this.chooseEvasionDirection(dx, dy);
+                this.directionChangeTimer = 0;
+            }
+            
+            // Aplicar el movimiento según la dirección elegida
+            const evasionSpeed = this.speed * 1.2; // Ligero boost al evadir
+            switch (this.currentEvasionDirection) {
+                case 'up':
+                    moveX = -Math.cos(angle) * 0.5;
+                    moveY = -1;
+                    break;
+                case 'down':
+                    moveX = -Math.cos(angle) * 0.5;
+                    moveY = 1;
+                    break;
+                case 'left':
+                    moveX = -1;
+                    moveY = -Math.sin(angle) * 0.5;
+                    break;
+                case 'right':
+                    moveX = 1;
+                    moveY = -Math.sin(angle) * 0.5;
+                    break;
+            }
+            
+            this.x += moveX * evasionSpeed;
+            this.y += moveY * evasionSpeed;
+            isMoving = true;
+        } 
+        else if (distance > this.chaseRange) {
+            // Persiguiendo al jugador (movimiento directo)
+            moveX = Math.cos(angle);
+            moveY = Math.sin(angle);
+            
+            this.x += moveX * this.speed;
+            this.y += moveY * this.speed;
+            isMoving = true;
+        } 
+        else {
+            // En rango óptimo - idle mirando al jugador
+            this.currentEvasionDirection = null;
+            this.setIdleAnimation(dx, dy);
+            return;
+        }
+
+        // Actualizar animación según el movimiento real
+        if (isMoving) {
+            this.setMovementAnimation(moveX, moveY);
+        }
+    }
+    
+    chooseEvasionDirection(dx, dy) {
+        // Determinar si el jugador está más cerca horizontal o verticalmente
+        if (Math.abs(dx) > Math.abs(dy)) {
+            // Jugador se acerca horizontalmente - evadir vertical
+            this.currentEvasionDirection = Math.random() < 0.5 ? 'up' : 'down';
+        } else {
+            // Jugador se acerca verticalmente - evadir horizontal
+            this.currentEvasionDirection = Math.random() < 0.5 ? 'left' : 'right';
+        }
+    }
+    
+    setMovementAnimation(moveX, moveY) {
+        // Determinar la dirección del movimiento basado en el vector de movimiento
+        if (Math.abs(moveX) > Math.abs(moveY)) {
+            // Movimiento horizontal
+            this.frameY = moveX > 0 ? 5 : 6; // derecha : izquierda
+        } else {
+            // Movimiento vertical
+            this.frameY = moveY > 0 ? 7 : 4; // abajo : arriba
+        }
+    }
+    
+    setIdleAnimation(dx, dy) {
+        // Determinar la dirección basada en la posición relativa del jugador
+        if (Math.abs(dx) > Math.abs(dy)) {
+            // Jugador está más lejos horizontalmente
+            this.frameY = dx > 0 ? 1 : 2; // derecha : izquierda
+        } else {
+            // Jugador está más lejos verticalmente
+            this.frameY = dy > 0 ? 0 : 3; // abajo : arriba
+        }
+    }
+    
+    updateAnimation() {
         this.frameTimer++;
         if (this.frameTimer >= this.frameDelay) {
             this.frameTimer = 0;
@@ -806,36 +977,124 @@ class BlueKnight {
             this.height
         );
     }
-    
-    changeDirection() {
-        const directions = ['right', 'left', 'up', 'down'];
-        const currentIndex = directions.indexOf(this.direction);
-        let newIndex;
-        
-        do {
-            newIndex = Math.floor(Math.random() * directions.length);
-        } while (newIndex === currentIndex);
-        
-        this.direction = directions[newIndex];
-        
-        if (!this.isMoving) {
-            switch(this.direction) {
-                case 'right': this.frameY = 1; break;
-                case 'left': this.frameY = 2; break;
-                case 'up': this.frameY = 3; break;
-                case 'down': this.frameY = 0; break;
-            }
-        }
+
+    moveWithMap(dx, dy) {
+        super.moveWithMap(dx, dy);
+        // No necesitamos actualizar this.position ya que usamos x,y directamente
     }
 }
 
 //----------------------------------------
-// INSTANCIA DEL ENEMIGO
+// INSTANCIAS DE ENEMIGOS
 //----------------------------------------
-const spawnWorldX = 420;  // Coordenada X del spawn del enemigo en el mundo
-const spawnWorldY = 1242; // Coordenada Y del spawn del enemigo en el mundo
-const blueKnight = new BlueKnight(
-    spawnWorldX + offset.x,
-    spawnWorldY + offset.y
-);
+// Definir las posiciones de spawn de los caballeros
+const knightSpawnPoints = [
+    { x: 286, y: 1156 },  // Posición original
+    { x: 442, y: 1168 },  // Nueva posición
+    { x: 360, y: 1324 }   // Otra posición
+];
 
+// Crear los caballeros en sus posiciones
+knightSpawnPoints.forEach(spawn => {
+    gameObjects.blueKnights.push(
+        new BlueKnight(
+            spawn.x + offset.x,
+            spawn.y + offset.y
+        )
+    );
+});
+
+//----------------------------------------
+// CLASE HEALTHBAR
+//----------------------------------------
+class HealthBar {
+    constructor() {
+        this.maxHealth = 10;
+        this.currentHealth = this.maxHealth;
+        this.sprite = new Image();
+        this.sprite.src = 'img/UI/health.png';
+        
+        // Dimensiones originales de cada frame
+        this.frameWidth = 39;
+        this.frameHeight = 6;
+        
+        // Factor de escala para la barra de vida
+        this.scale = 2;
+        
+        // Posici��n en pantalla (considerando el zoom y el nuevo tamaño)
+        this.x = 10 / zoomLevel;
+        this.y = 10 / zoomLevel;
+    }
+
+    draw(ctx) {
+        // Calcular qué frame mostrar (10 - vida actual)
+        const frameIndex = this.maxHealth - this.currentHealth;
+        
+        ctx.drawImage(
+            this.sprite,
+            frameIndex * this.frameWidth,    // sourceX
+            0,                               // sourceY
+            this.frameWidth,                 // sourceWidth
+            this.frameHeight,                // sourceHeight
+            this.x,                          // destinationX
+            this.y,                          // destinationY
+            this.frameWidth * this.scale,    // destinationWidth (escalado x2)
+            this.frameHeight * this.scale    // destinationHeight (escalado x2)
+        );
+    }
+
+    takeDamage(amount) {
+        this.currentHealth = Math.max(0, this.currentHealth - amount);
+        
+        if (this.currentHealth <= 0) {
+            isGameOver = true;
+            timeBeforeRespawn = 500;
+        }
+    }
+
+    heal(amount) {
+        this.currentHealth = Math.min(this.maxHealth, this.currentHealth + amount);
+    }
+}
+
+//----------------------------------------
+// INICIALIZACIÓN DEL JUEGO (modificar)
+//----------------------------------------
+// Añadir la barra de vida como variable global
+const playerHealth = new HealthBar();
+
+function resetGame() {
+    isGameOver = false;
+    isPlayerInBattle = false;
+    playerHealth.currentHealth = playerHealth.maxHealth;
+    
+    // Reiniciar posición del mapa
+    offset.x = 100;
+    offset.y = -1130;
+    
+    // Reiniciar todos los objetos del juego
+    Object.values(gameObjects).forEach(objectGroup => {
+        if (Array.isArray(objectGroup)) {
+            objectGroup.forEach(obj => obj.reset());
+        } else if (objectGroup && typeof objectGroup.reset === 'function') {
+            objectGroup.reset();
+        }
+    });
+    
+    // Reiniciar estado de las salas
+    rooms.forEach(room => {
+        room.isCleared = false;
+        room.isActive = false;
+    });
+}
+
+// Modificar la función que mueve los objetos cuando el jugador se mueve
+function moveAllObjects(dx, dy) {
+    Object.values(gameObjects).forEach(objectGroup => {
+        if (Array.isArray(objectGroup)) {
+            objectGroup.forEach(obj => obj.moveWithMap(dx, dy));
+        } else if (objectGroup && typeof objectGroup.moveWithMap === 'function') {
+            objectGroup.moveWithMap(dx, dy);
+        }
+    });
+}
