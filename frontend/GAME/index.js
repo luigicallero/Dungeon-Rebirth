@@ -502,6 +502,23 @@ function Update() {
         for (let i = playerBullets.length - 1; i >= 0; i--) {
             playerBullets[i].update();
             
+            // Verificar colisiones con enemigos
+            let bulletHitEnemyFlag = false;
+            if (isPlayerInBattle) {
+                for (const knight of gameObjects.blueKnights) {
+                    if (!knight.isDead && bulletHitEnemy(playerBullets[i], knight)) {
+                        knight.takeDamage(1);
+                        bulletHitEnemyFlag = true;
+                        break;
+                    }
+                }
+            }
+            
+            if (bulletHitEnemyFlag) {
+                playerBullets.splice(i, 1);
+                continue;
+            }
+            
             // Verificar colisiones con boundaries
             let bulletHitBoundary = false;
             
@@ -956,9 +973,17 @@ class BlueKnight extends GameObject {
         // Añadir variables para el disparo
         this.shootTimer = 0; // Frames antes de poder disparar
         this.shootInterval = 70; // Disparar cada 26 frames
+        
+        // Añadir variables de vida y daño
+        this.maxHealth = 6;  // Vida inicial del enemigo <--------------------- VIDA DEL ENEMIGO
+        this.currentHealth = this.maxHealth;
+        this.damageFrames = 0;  // Contador para los frames de daño
+        this.isDead = false;  // Para controlar si el enemigo está muerto
     }
     
     update() {
+        if (this.isDead) return;  // No actualizar si está muerto
+
         const playerWorldX = -background.position.x + playerX;
         const playerWorldY = -background.position.y + playerY;
         const enemyWorldX = this.x - background.position.x;
@@ -1094,10 +1119,12 @@ class BlueKnight extends GameObject {
     }
     
     draw(ctx) {
+        if (this.isDead) return;  // No dibujar si está muerto
+
         ctx.drawImage(
             this.sprite,
-            this.frameX * this.width,
-            this.frameY * this.height,
+            (this.damageFrames > 0 ? 0 : this.frameX) * this.width,  // Columna 1 para el frame de daño
+            (this.damageFrames > 0 ? 8 : this.frameY) * this.height,  // Fila 8 para el frame de daño
             this.width,
             this.height,
             this.x,
@@ -1105,6 +1132,10 @@ class BlueKnight extends GameObject {
             this.width,
             this.height
         );
+
+        if (this.damageFrames > 0) {
+            this.damageFrames--;
+        }
     }
 
     moveWithMap(dx, dy) {
@@ -1129,6 +1160,16 @@ class BlueKnight extends GameObject {
             gameImages.bullet,
             'enemy'
         ));
+    }
+
+    // Añadir método para recibir daño
+    takeDamage(amount) {
+        this.currentHealth = Math.max(0, this.currentHealth - amount);
+        this.damageFrames = 10;  // Activar frames de daño
+        
+        if (this.currentHealth <= 0) {
+            this.isDead = true;
+        }
     }
 }
 
@@ -1225,7 +1266,14 @@ function resetGame() {
     // Reiniciar todos los objetos del juego
     Object.values(gameObjects).forEach(objectGroup => {
         if (Array.isArray(objectGroup)) {
-            objectGroup.forEach(obj => obj.reset());
+            objectGroup.forEach(obj => {
+                obj.reset();
+                if (obj instanceof BlueKnight) {
+                    obj.currentHealth = obj.maxHealth;
+                    obj.isDead = false;
+                    obj.damageFrames = 0;
+                }
+            });
         } else if (objectGroup && typeof objectGroup.reset === 'function') {
             objectGroup.reset();
         }
@@ -1403,3 +1451,13 @@ canvas.addEventListener('click', (e) => {
     
     playerBullets.push(bullet);
 });
+
+// Añadir función para detectar colisiones entre balas y enemigos
+function bulletHitEnemy(bullet, enemy) {
+    return (
+        bullet.x + bullet.width >= enemy.x &&
+        bullet.x <= enemy.x + enemy.width &&
+        bullet.y + bullet.height >= enemy.y &&
+        bullet.y <= enemy.y + enemy.height
+    );
+}
