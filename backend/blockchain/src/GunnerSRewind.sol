@@ -39,10 +39,23 @@ interface ICheckPointNFT {
 contract GunnerSRewind is Ownable {
     ICheckPointNFT public immutable checkpointNFT;
     
-    // Game state mappings
-    // mapping(address => bool) public activePlayers;
-    // mapping(address => uint256) public playerLevels;
-    // ... other game state variables
+    // Struct to hold game state parameters
+    struct GameState {
+        string worldName;
+        uint16 levelNumber;
+        uint8 levelPercentage;
+        uint128 playerScore;
+        uint16 health;
+        uint16 souls;
+        string[] weapons;
+        string[] items;
+        uint32 timePlayed;
+        uint32 kills;
+        uint16 boosters;
+    }
+
+    // Mapping to store game states for each player
+    mapping(address => GameState) public playerGameStates;
 
     // Access control roles
     mapping(address => bool) public gameOperators;
@@ -104,7 +117,7 @@ contract GunnerSRewind is Ownable {
         );
     }
 
-    // New function to mint checkpoints
+    // Function to mint checkpoints
     function mintCheckpoint(
         string memory worldName,
         uint16 levelNumber,
@@ -134,7 +147,7 @@ contract GunnerSRewind is Ownable {
         return tokenId;
     }
 
-    function getCurrentGameState(address player) internal view returns (
+    function setCurrentGameState(
         string memory worldName,
         uint16 levelNumber,
         uint8 levelPercentage,
@@ -145,10 +158,21 @@ contract GunnerSRewind is Ownable {
         string[] memory items,
         uint32 timePlayed,
         uint32 kills,
-        uint16 boosters
+        uint16 boosters) external onlyOwner (
     ) {
-        // Implementation to get current game state
-        // This should be implemented based on your game's specific logic
+        playerGameStates[msg.sender] = GameState({
+            worldName: worldName,
+            levelNumber: levelNumber,
+            levelPercentage: levelPercentage,
+            playerScore: playerScore,
+            health: health,
+            souls: souls,
+            weapons: weapons,
+            items: items,
+            timePlayed: timePlayed,
+            kills: kills,
+            boosters: boosters
+        });
     }
 
     // Events
