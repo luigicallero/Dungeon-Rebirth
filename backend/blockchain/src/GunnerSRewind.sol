@@ -3,8 +3,9 @@ pragma solidity ^0.8.25;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 
-// Add the interface for CheckPointNFT if not already defined
+// Add the interface for CheckPointNFT
 interface ICheckPointNFT {
+    function balanceOf(address) external view returns(uint256);
     function ownerOf(uint256 tokenId) external view returns (address);
     function updateCheckpointData(
         uint256 tokenId,
@@ -39,8 +40,8 @@ contract GunnerSRewind is Ownable {
     ICheckPointNFT public immutable checkpointNFT;
     
     // Game state mappings
-    mapping(address => bool) public activePlayers;
-    mapping(address => uint256) public playerLevels;
+    // mapping(address => bool) public activePlayers;
+    // mapping(address => uint256) public playerLevels;
     // ... other game state variables
 
     // Access control roles
@@ -51,8 +52,9 @@ contract GunnerSRewind is Ownable {
         _;
     }
 
+    // owner of a CheckPoint NFT is an activePlayer
     modifier onlyActivePlayer() {
-        require(activePlayers[msg.sender], "Not an active player");
+        require(checkpointNFT.balanceOf(msg.sender) > 0, "Not an active player");
         _;
     }
 
@@ -66,14 +68,8 @@ contract GunnerSRewind is Ownable {
         emit GameOperatorUpdated(operator, status);
     }
 
-    // Player management
-    function registerPlayer(address player) external onlyGameOperator {
-        activePlayers[player] = true;
-        emit PlayerRegistered(player);
-    }
-
     // Checkpoint update function
-    function triggerCheckpointUpdate(uint256 tokenId) external onlyActivePlayer {
+    function insertCheckpoint(uint256 tokenId) external onlyActivePlayer {
         require(msg.sender == checkpointNFT.ownerOf(tokenId), "Only token owner");
         
         // Get current game state for the player
@@ -121,7 +117,7 @@ contract GunnerSRewind is Ownable {
         uint32 timePlayed,
         uint32 kills,
         uint16 boosters
-    ) external onlyGameOperator returns (uint256) {
+    ) external returns (uint256) {
         uint256 tokenId = checkpointNFT.mintCheckpoint(
             worldName,
             levelNumber,
