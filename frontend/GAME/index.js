@@ -38,6 +38,7 @@ const gameObjects = {
 };
 
 const bullets = [];
+const playerBullets = []; // Array separado para las balas del jugador
 
 // Clase base para todos los objetos del juego
 class GameObject {
@@ -250,7 +251,9 @@ const sources = {
     map: "img/Level Map.png",
     player: "img/PlayerChris.png",
     gameOver: "img/UI/GameOverScreen.png",
-    health: "img/playerLives.png"
+    health: "img/playerLives.png",
+    bullet: "img/bullet.png",
+    playerBullet: "img/playerBullet.png"
 };
 
 //----------------------------------------
@@ -495,6 +498,45 @@ function Update() {
             boundary.draw();
         });
 
+        // Actualizar y dibujar balas del jugador (fuera del bloque isPlayerInBattle)
+        for (let i = playerBullets.length - 1; i >= 0; i--) {
+            playerBullets[i].update();
+            
+            // Verificar colisiones con boundaries
+            let bulletHitBoundary = false;
+            
+            // Verificar colisiones con paredes normales
+            for (const boundary of gameObjects.boundaries) {
+                if (bulletCollision(playerBullets[i], boundary)) {
+                    bulletHitBoundary = true;
+                    break;
+                }
+            }
+            
+            // Verificar colisiones con puertas
+            if (!bulletHitBoundary && isPlayerInBattle) {
+                for (const door of gameObjects.doorBoundaries) {
+                    if (bulletCollision(playerBullets[i], door)) {
+                        bulletHitBoundary = true;
+                        break;
+                    }
+                }
+            }
+            
+            // Si la bala golpeó algo o está muy lejos, eliminarla
+            const distanceFromPlayer = Math.hypot(
+                playerBullets[i].x - playerX,
+                playerBullets[i].y - playerY
+            );
+            
+            if (bulletHitBoundary || distanceFromPlayer > 500) {
+                playerBullets.splice(i, 1);
+                continue;
+            }
+            
+            playerBullets[i].draw(ctx);
+        }
+
         // Solo dibujar las puertas y caballeros si el jugador está en batalla
         if (isPlayerInBattle) {
             gameObjects.doorBoundaries.forEach((doorBoundary) => {
@@ -507,14 +549,14 @@ function Update() {
                 knight.draw(ctx);
             });
             
-            // Actualizar y dibujar balas
+            // Actualizar y dibujar balas enemigas
             for (let i = bullets.length - 1; i >= 0; i--) {
                 bullets[i].update();
                 
                 // Verificar si la bala golpea al jugador
                 if (bulletHitPlayer(bullets[i])) {
                     playerHealth.takeDamage(1);
-                    playerDamageFrames = 2; // Activar frames de daño
+                    playerDamageFrames = 10; // Cambiar a 10 frames de daño
                     bullets.splice(i, 1);
                     continue;
                 }
@@ -562,16 +604,33 @@ function Update() {
         isMoving = false;
         if (keys.a && canMove.left) {
             isMoving = true;
-            lastDirection = 'left';
         } else if (keys.d && canMove.right) {
             isMoving = true;
-            lastDirection = 'right';
         } else if (keys.w && canMove.up) {
             isMoving = true;
-            lastDirection = 'up';
         } else if (keys.s && canMove.down) {
             isMoving = true;
-            lastDirection = 'down';
+        }
+
+        // Calcular la dirección basada en el mouse
+        if (!isGameOver) {
+            const dx = mouseX - playerX;
+            const dy = mouseY - playerY;
+            
+            // Calcular el ángulo entre el jugador y el mouse
+            const angle = Math.atan2(dy, dx);
+            const degrees = angle * (180 / Math.PI);
+            
+            // Determinar la dirección basada en el ángulo
+            if (degrees >= -45 && degrees < 45) {
+                lastMouseDirection = 'right';
+            } else if (degrees >= 45 && degrees < 135) {
+                lastMouseDirection = 'down';
+            } else if (degrees >= -135 && degrees < -45) {
+                lastMouseDirection = 'up';
+            } else {
+                lastMouseDirection = 'left';
+            }
         }
 
         // Actualizar frame counter y current frame
@@ -588,13 +647,12 @@ function Update() {
         // Determinar fila y columna del sprite
         let row, column;
         if (playerDamageFrames > 0) {
-            // Si está en frames de daño, usar la novena fila (índice 8)
             row = 8;
-            column = 1; // Frame estático
-            playerDamageFrames--; // Decrementar contador
+            column = 0;
+            playerDamageFrames--;
         } else {
-            // Animación normal
-            switch (lastDirection) {
+            // Usar la dirección del mouse en lugar de lastDirection
+            switch (lastMouseDirection) {
                 case 'left':
                     row = 6;
                     break;
@@ -898,10 +956,6 @@ class BlueKnight extends GameObject {
         // Añadir variables para el disparo
         this.shootTimer = 0; // Frames antes de poder disparar
         this.shootInterval = 70; // Disparar cada 26 frames
-        
-        // Cargar imagen de la bala
-        this.bulletImage = new Image();
-        this.bulletImage.src = 'img/bullet.png';
     }
     
     update() {
@@ -1064,17 +1118,16 @@ class BlueKnight extends GameObject {
         const enemyWorldX = this.x - background.position.x;
         const enemyWorldY = this.y - background.position.y;
         
-        // Calcular dirección hacia el jugador
         const dx = playerWorldX - enemyWorldX;
         const dy = playerWorldY - enemyWorldY;
         const angle = Math.atan2(dy, dx);
         
-        // Crear nueva bala
         bullets.push(new Bullet(
             this.x + this.width/2,
             this.y + this.height/2,
             angle,
-            this.bulletImage
+            gameImages.bullet,
+            'enemy'
         ));
     }
 }
@@ -1184,8 +1237,9 @@ function resetGame() {
         room.isActive = false;
     });
     
-    // Limpiar array de balas
+    // Limpiar arrays de balas
     bullets.length = 0;
+    playerBullets.length = 0;
     playerDamageFrames = 0;
 }
 
@@ -1201,6 +1255,7 @@ function moveAllObjects(dx, dy) {
     
     // Mover las balas con el mapa
     bullets.forEach(bullet => bullet.moveWithMap(dx, dy));
+    playerBullets.forEach(bullet => bullet.moveWithMap(dx, dy));
 }
 
 //----------------------------------------
@@ -1219,13 +1274,29 @@ function bulletCollision(bullet, boundary) {
 // CLASE BULLET
 //----------------------------------------
 class Bullet extends GameObject {
-    constructor(x, y, angle, image) {
+    // Configuraciones predeterminadas para diferentes tipos de balas
+    static BULLET_TYPES = {
+        enemy: {
+            speed: 1.5,
+            width: 10,
+            height: 6
+        },
+        player: {
+            speed: 4,  // Bala del jugador más rápida
+            width: 10,
+            height: 6
+        }
+    };
+
+    constructor(x, y, angle, image, type = 'enemy') {
         super(x, y);
-        this.speed = 1.5;
+        const config = Bullet.BULLET_TYPES[type];
+        this.speed = config.speed;
         this.angle = angle;
         this.image = image;
-        this.width = 10;
-        this.height = 6;
+        this.width = config.width;
+        this.height = config.height;
+        this.type = type;
         
         // Calcular velocidades basadas en el ángulo
         this.vx = Math.cos(angle) * this.speed;
@@ -1293,3 +1364,42 @@ function bulletHitPlayer(bullet) {
 
 // Al inicio del juego, guardar el tiempo original
 const ORIGINAL_TIME = timeBeforeRespawn;
+
+// Añadir cerca de las otras variables globales
+let mouseX = 0;
+let mouseY = 0;
+let lastMouseDirection = 'down'; // Dirección por defecto
+
+// Añadir después de los otros event listeners
+canvas.addEventListener('mousemove', (e) => {
+    // Obtener la posición real del mouse en el canvas considerando el zoom
+    const rect = canvas.getBoundingClientRect();
+    mouseX = (e.clientX - rect.left) / zoomLevel;
+    mouseY = (e.clientY - rect.top) / zoomLevel;
+});
+
+// Añadir después del event listener del mouse
+canvas.addEventListener('click', (e) => {
+    if (isGameOver) return;
+    
+    // Obtener la posición real del mouse en el canvas
+    const rect = canvas.getBoundingClientRect();
+    const clickX = (e.clientX - rect.left) / zoomLevel;
+    const clickY = (e.clientY - rect.top) / zoomLevel;
+    
+    // Calcular el ángulo entre el jugador y el click
+    const dx = clickX - playerX;
+    const dy = clickY - playerY;
+    const angle = Math.atan2(dy, dx);
+    
+    // Crear nueva bala desde el centro del jugador usando la imagen precargada
+    const bullet = new Bullet(
+        playerX + 9.5,
+        playerY + 10,
+        angle,
+        gameImages.playerBullet,
+        'player'
+    );
+    
+    playerBullets.push(bullet);
+});
