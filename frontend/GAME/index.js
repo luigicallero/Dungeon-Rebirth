@@ -245,7 +245,8 @@ function loadImages(sources, callback) {
 const sources = {
     map: "img/Level Map.png",
     player: "img/PlayerChris.png",
-    gameOver: "img/UI/GameOverScreen.png"
+    gameOver: "img/UI/GameOverScreen.png",
+    health: "img/UI/health.png"
 };
 
 //----------------------------------------
@@ -853,7 +854,7 @@ class BlueKnight extends GameObject {
         if (this.hasSeenPlayer) {
             this.handleMovement(distance, dx, dy);
         } else {
-            // Animación inicial antes de detectar al jugador
+            // Animaci��n inicial antes de detectar al jugador
             this.setIdleAnimation(dx, dy);
         }
         
@@ -1011,8 +1012,9 @@ class HealthBar {
     constructor() {
         this.maxHealth = 10;
         this.currentHealth = this.maxHealth;
-        this.sprite = new Image();
-        this.sprite.src = 'img/UI/health.png';
+        // Eliminar la carga individual de la imagen
+        // this.sprite = new Image();
+        // this.sprite.src = 'img/UI/health.png';
         
         // Dimensiones originales de cada frame
         this.frameWidth = 39;
@@ -1021,7 +1023,7 @@ class HealthBar {
         // Factor de escala para la barra de vida
         this.scale = 2;
         
-        // Posici��n en pantalla (considerando el zoom y el nuevo tamaño)
+        // Posición en pantalla (considerando el zoom y el nuevo tamaño)
         this.x = 10 / zoomLevel;
         this.y = 10 / zoomLevel;
     }
@@ -1031,15 +1033,15 @@ class HealthBar {
         const frameIndex = this.maxHealth - this.currentHealth;
         
         ctx.drawImage(
-            this.sprite,
-            frameIndex * this.frameWidth,    // sourceX
-            0,                               // sourceY
-            this.frameWidth,                 // sourceWidth
-            this.frameHeight,                // sourceHeight
-            this.x,                          // destinationX
-            this.y,                          // destinationY
-            this.frameWidth * this.scale,    // destinationWidth (escalado x2)
-            this.frameHeight * this.scale    // destinationHeight (escalado x2)
+            gameImages.health,    // Usar la imagen precargada
+            frameIndex * this.frameWidth,
+            0,
+            this.frameWidth,
+            this.frameHeight,
+            this.x,
+            this.y,
+            this.frameWidth * this.scale,
+            this.frameHeight * this.scale
         );
     }
 
