@@ -246,7 +246,7 @@ const sources = {
     map: "img/Level Map.png",
     player: "img/PlayerChris.png",
     gameOver: "img/UI/GameOverScreen.png",
-    //health: "img/UI/health.png"
+    health: "img/playerLives.png"
 };
 
 //----------------------------------------
@@ -496,6 +496,7 @@ function Update() {
                 doorBoundary.draw();
             });
             
+            // Actualizar y dibujar todos los caballeros
             gameObjects.blueKnights.forEach(knight => {
                 knight.update();
                 knight.draw(ctx);
@@ -562,6 +563,9 @@ function Update() {
             spriteWidth,
             spriteHeight
         );
+
+        // Dibujar la barra de vida (siempre visible)
+        playerHealth.draw(ctx);
     }
 
     // Actualizar la posición de todos los caballeros cuando el jugador se mueve
@@ -1008,11 +1012,38 @@ class HealthBar {
     constructor() {
         this.maxHealth = 10;
         this.currentHealth = this.maxHealth;
-        this.frameWidth = 39;
-        this.frameHeight = 6;
+        
+        // Actualizar dimensiones para la nueva spritesheet
+        this.frameWidth = 39;    // 78/2 (2 columnas)
+        this.frameHeight = 6;  // 36/5 (5 filas)
+        
+        // Factor de escala para la barra de vida
         this.scale = 2;
+        
+        // Posición en pantalla
         this.x = 10 / zoomLevel;
         this.y = 10 / zoomLevel;
+    }
+
+    draw(ctx) {
+        // Calcular qué frame mostrar basado en la vida actual
+        const frameIndex = this.maxHealth - this.currentHealth;
+        
+        // Calcular la fila y columna en la spritesheet
+        const row = Math.floor(frameIndex / 2);  // 2 columnas
+        const col = frameIndex % 2;              // 2 columnas
+        
+        ctx.drawImage(
+            gameImages.health,
+            col * this.frameWidth,           // sourceX
+            row * this.frameHeight,          // sourceY
+            this.frameWidth,                 // sourceWidth
+            this.frameHeight,                // sourceHeight
+            this.x,                          // destinationX
+            this.y,                          // destinationY
+            this.frameWidth * this.scale,    // destinationWidth
+            this.frameHeight * this.scale    // destinationHeight
+        );
     }
 
     takeDamage(amount) {
