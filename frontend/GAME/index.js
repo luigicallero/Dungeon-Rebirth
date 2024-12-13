@@ -298,9 +298,11 @@ window.addEventListener("keydown", (e) => {
     }
     if (e.key.toLowerCase() === 'e') {
         isPlayerInBattle = !isPlayerInBattle; // Alterna entre true y false
+    }
+    if (e.key.toLowerCase() === 'o') {
         playerHealth.takeDamage(1);
     }
-    if (e.key.toLowerCase() === 'q') {
+    if (e.key.toLowerCase() === 'p') {
         playerHealth.heal(1);
     }
 });
@@ -355,7 +357,7 @@ function Update() {
     const worldY = -background.position.y + playerY;
     
     // Mostrar coordenadas del jugador en consola
-    //console.log(`Coordenadas del jugador - X: ${Math.round(worldX)}, Y: ${Math.round(worldY)}`);
+    console.log(`======================== x: ${Math.round(worldX)}, y: ${Math.round(worldY)}`);
     
     ctx.clearRect(0, 0, canvas.width / zoomLevel, canvas.height / zoomLevel);
     
@@ -432,6 +434,9 @@ function Update() {
     });
 
     if (isPlayerInBattle) {
+        // Verificar si la ronda actual está completa
+        roomManager.checkWaveCompletion();
+        
         // Añadir verificación de colisiones para puertas
         gameObjects.doorBoundaries.forEach(doorBoundary => {
             if(rectangularCollision({
@@ -900,8 +905,8 @@ function checkRoomEntry() {
             if (!room.isActive && !room.isCleared) {
                 console.log('¡Jugador entró en la sala!'); // Para debugging
                 room.isActive = true;
-                currentRoom = room;
                 isPlayerInBattle = true;
+                roomManager.startRoom(room.id);
             }
         }
     });
@@ -1284,6 +1289,10 @@ function resetGame() {
         room.isCleared = false;
         room.isActive = false;
     });
+    // Reiniciar estado de las rondas
+    roomManager.currentRoom = null;
+    roomManager.currentWave = 0;
+    roomManager.isWaveActive = false;
     
     // Limpiar arrays de balas
     bullets.length = 0;
@@ -1461,3 +1470,119 @@ function bulletHitEnemy(bullet, enemy) {
         bullet.y <= enemy.y + enemy.height
     );
 }
+
+//----------------------------------------
+// CONFIGURACIÓN DE RONDAS POR SALA
+//----------------------------------------
+const roomWaves = { //============================================================ MODIFICAR OLEADAS
+    1: [ // Sala 1
+        { // Ronda 1
+            enemies: [
+                { type: 'BlueKnight', x: Math.floor(Math.random() * (466-254) + 254), y: Math.floor(Math.random() * (1341-1127) + 1127) },
+                { type: 'BlueKnight', x: Math.floor(Math.random() * (466-254) + 254), y: Math.floor(Math.random() * (1341-1127) + 1127) },
+                { type: 'BlueKnight', x: Math.floor(Math.random() * (466-254) + 254), y: Math.floor(Math.random() * (1341-1127) + 1127) }
+            ]
+        },
+        { // Ronda 2
+            enemies: [
+                { type: 'BlueKnight', x: Math.floor(Math.random() * (466-254) + 254), y: Math.floor(Math.random() * (1341-1127) + 1127) },
+                { type: 'BlueKnight', x: Math.floor(Math.random() * (466-254) + 254), y: Math.floor(Math.random() * (1341-1127) + 1127) },
+                { type: 'BlueKnight', x: Math.floor(Math.random() * (466-254) + 254), y: Math.floor(Math.random() * (1341-1127) + 1127) },
+                { type: 'BlueKnight', x: Math.floor(Math.random() * (466-254) + 254), y: Math.floor(Math.random() * (1341-1127) + 1127) }
+            ]
+        },
+        { // Ronda 3
+            enemies: [
+                { type: 'BlueKnight', x: Math.floor(Math.random() * (466-254) + 254), y: Math.floor(Math.random() * (1341-1127) + 1127) },
+                { type: 'BlueKnight', x: Math.floor(Math.random() * (466-254) + 254), y: Math.floor(Math.random() * (1341-1127) + 1127) },
+                { type: 'BlueKnight', x: Math.floor(Math.random() * (466-254) + 254), y: Math.floor(Math.random() * (1341-1127) + 1127) },
+                { type: 'BlueKnight', x: Math.floor(Math.random() * (466-254) + 254), y: Math.floor(Math.random() * (1341-1127) + 1127) },
+                { type: 'BlueKnight', x: Math.floor(Math.random() * (466-254) + 254), y: Math.floor(Math.random() * (1341-1127) + 1127) }
+            ]
+        }
+    ]
+    // Puedes añadir más salas siguiendo el mismo formato
+    // 2: [ ... ],
+    // 3: [ ... ],
+};
+
+// Modificar la clase Room para manejar las rondas
+class RoomManager {
+    constructor() {
+        this.currentRoom = null;
+        this.currentWave = 0;
+        this.isWaveActive = false;
+    }
+
+    startRoom(roomId) {
+        this.currentRoom = roomId;
+        this.currentWave = 0;
+        this.startNextWave();
+    }
+
+    startNextWave() {
+        if (!this.currentRoom || !roomWaves[this.currentRoom]) return;
+
+        const waves = roomWaves[this.currentRoom];
+        if (this.currentWave >= waves.length) {
+            // Todas las rondas completadas
+            this.completeRoom();
+            return;
+        }
+
+        // Limpiar enemigos anteriores
+        gameObjects.blueKnights = [];
+
+        // Spawner enemigos de la ronda actual
+        const wave = waves[this.currentWave];
+        wave.enemies.forEach((enemy, index) => {
+            if (enemy.type === 'BlueKnight') {
+                // Convertir coordenadas del mundo a coordenadas de pantalla
+                const screenX = enemy.x + background.position.x;
+                const screenY = enemy.y + background.position.y;
+                
+                const knight = new BlueKnight(
+                    screenX,
+                    screenY
+                );
+                
+                gameObjects.blueKnights.push(knight);
+                console.log(`Ronda ${this.currentWave}: Caballero Azul #${index + 1} ha aparecido en coordenadas del mundo X: ${Math.round(enemy.x)}, Y: ${Math.round(enemy.y)}`);
+            }
+        });
+
+        this.isWaveActive = true;
+        this.currentWave++;
+    }
+
+    checkWaveCompletion() {
+        if (!this.isWaveActive) return;
+
+        // Verificar si todos los enemigos están muertos
+        const allEnemiesDead = gameObjects.blueKnights.every(knight => knight.isDead);
+        
+        if (allEnemiesDead) {
+            this.isWaveActive = false;
+            
+            // Pequeña pausa antes de la siguiente ronda
+            setTimeout(() => {
+                this.startNextWave();
+            }, 1000);
+        }
+    }
+
+    completeRoom() {
+        const room = rooms.find(r => r.id === this.currentRoom);
+        if (room) {
+            room.isCleared = true;
+            room.isActive = false;
+            isPlayerInBattle = false;
+        }
+        this.currentRoom = null;
+        this.currentWave = 0;
+        this.isWaveActive = false;
+    }
+}
+
+// Crear instancia global del RoomManager
+const roomManager = new RoomManager();
