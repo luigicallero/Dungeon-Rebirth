@@ -287,95 +287,32 @@ const keys = {
     d: false
 };
 
-// Añadir variable global para controlar visibilidad del scoreboard
-let isScoreboardVisible = false;
-
-window.addEventListener("keydown", (e) => {
-    // Si el juego está en game over, ignorar inputs
-    if (isGameOver) return;
-
-    if (['w', 'a', 's', 'd'].includes(e.key.toLowerCase())) {
-        e.preventDefault();
-        switch (e.key.toLowerCase()) {
-            case "w": keys.w = true; break;
-            case "s": keys.s = true; break;  
-            case "a": keys.a = true; break;
-            case "d": keys.d = true; break;
-        }
-    }
-    if (e.key.toLowerCase() === 'e' && !isEKeyPressed) {
-        isEKeyPressed = true;
-        eKeyPressTime = Date.now();
-        
-        // Solo mostrar el botón si se puede colocar un checkpoint
-        const currentRoomId = getCurrentRoom();
-        if (!isPlayerInBattle && rooms[0].isCleared && !hasCheckpointInRoom(currentRoomId)) {
-            holdEButton.startAnimation();
-        }
-        
-        // Iniciar el timer para el checkpoint
-        setTimeout(() => {
-            if (isEKeyPressed && !isPlayerInBattle && rooms[0].isCleared) {
-                const currentRoomId = getCurrentRoom();
-                
-                // Verificar si ya hay un checkpoint en esta sala
-                if (!hasCheckpointInRoom(currentRoomId)) {
-                    // Desactivar el checkpoint anterior si existe
-                    const lastCheckpoint = gameObjects.checkpoints[gameObjects.checkpoints.length - 1];
-                    if (lastCheckpoint) {
-                        lastCheckpoint.deactivate();
-                    }
-                    
-                    // Crear nuevo checkpoint
-                    const worldX = -background.position.x + playerX;
-                    const worldY = -background.position.y + playerY;
-                    
-                    const checkpoint = new Checkpoint(
-                        worldX + background.position.x,
-                        worldY + background.position.y,
-                        currentRoomId  // Pasar el ID de la sala
-                    );
-                    
-                    gameObjects.checkpoints.push(checkpoint);
-                }
-            }
-        }, CHECKPOINT_PRESS_TIME);
-    }
-    /*if (e.key.toLowerCase() === 'o') {//=============================TECLAS CUSTOM
-        playerHealth.takeDamage(1);
-    }
-    if (e.key.toLowerCase() === 'p') {
-        playerHealth.heal(1);
-    }
-    if (e.key.toLowerCase() === 'r') {
-        roomManager.completeRoom();
-    }*/
-});
-
-window.addEventListener("keyup", (e) => {
-    switch (e.key.toLowerCase()) {
-        case "w": keys.w = false; break;
-        case "s": keys.s = false; break;  
-        case "a": keys.a = false; break;
-        case "d": keys.d = false; break;
-        case "e": {
-            isEKeyPressed = false;
-            eKeyPressTime = 0;
-            holdEButton.stopAnimation(); // Detener animación
-        } break;
-        case "t": {
-            if (isScoreboardVisible) {
-                isScoreboardVisible = false;
-            } else {
-                isScoreboardVisible = true;
-            }
-        } break;
-    }
-});
-
 //----------------------------------------
 // BUCLES DE JUEGO Y ACTUALIZACIÓN
 //----------------------------------------
+// Añadir variables globales para el screen shake
+let screenShakeIntensity = 0;
+const SHAKE_SETTINGS = {
+    damage: {
+        duration: 10,
+        amount: 8
+    },
+    shoot: {
+        duration: 4,
+        amount: 2
+    }
+};
+
+// Función para activar el screen shake
+function activateScreenShake(type) {
+    const settings = SHAKE_SETTINGS[type];
+    // Solo aplicar el shake más fuerte si no hay uno activo o si es más intenso
+    if (screenShakeIntensity < settings.duration) {
+        screenShakeIntensity = settings.duration;
+    }
+    return settings.amount;
+}
+
 function Update() {
     if (isGameOver) {
         if (timeBeforeRespawn > 0) {
@@ -407,6 +344,23 @@ function Update() {
         
         window.requestAnimationFrame(Update);
         return;
+    }
+    
+    // Limpiar el canvas
+    ctx.clearRect(0, 0, canvas.width / zoomLevel, canvas.height / zoomLevel);
+    
+    // Aplicar screen shake si está activo
+    if (screenShakeIntensity > 0) {
+        ctx.save();
+        // Determinar la intensidad basada en el tipo de shake
+        const shakeAmount = screenShakeIntensity > SHAKE_SETTINGS.shoot.duration 
+            ? SHAKE_SETTINGS.damage.amount 
+            : SHAKE_SETTINGS.shoot.amount;
+            
+        const shakeX = (Math.random() - 0.5) * shakeAmount * (screenShakeIntensity / SHAKE_SETTINGS.damage.duration);
+        const shakeY = (Math.random() - 0.5) * shakeAmount * (screenShakeIntensity / SHAKE_SETTINGS.damage.duration);
+        ctx.translate(shakeX, shakeY);
+        screenShakeIntensity--;
     }
     
     // Calcular las coordenadas del mundo
@@ -562,9 +516,7 @@ function Update() {
 
         // Actualizar y dibujar scoreboard
         scoreboard.update();
-        if (isScoreboardVisible) {
-            scoreboard.draw(ctx);
-        }
+        scoreboard.draw(ctx);
 
         // Actualizar y dibujar balas del jugador (fuera del bloque isPlayerInBattle)
         for (let i = playerBullets.length - 1; i >= 0; i--) {
@@ -642,6 +594,7 @@ function Update() {
                 if (bulletHitPlayer(bullets[i])) {
                     playerHealth.takeDamage(1);
                     playerDamageFrames = 10; // Cambiar a 10 frames de daño
+                    activateScreenShake('damage');
                     bullets.splice(i, 1);
                     continue;
                 }
@@ -810,8 +763,10 @@ function Update() {
         });
     }
     
-    // Restaurar el estado del contexto
-    ctx.restore();
+    // Restaurar el contexto si hubo shake
+    if (screenShakeIntensity > 0) {
+        ctx.restore();
+    }
     
     window.requestAnimationFrame(Update);
 }
@@ -1565,6 +1520,9 @@ canvas.addEventListener('click', (e) => {
     );
     
     playerBullets.push(bullet);
+    
+    // Añadir shake al disparar
+    activateScreenShake('shoot');
 });
 
 // Añadir función para detectar colisiones entre balas y enemigos
@@ -1630,6 +1588,24 @@ const roomWaves = { //==========================================================
                 { type: 'BlueKnight', x: Math.floor(Math.random() * (866-654) + 654), y: Math.floor(Math.random() * (1358-1176) + 1176) },
                 { type: 'BlueKnight', x: Math.floor(Math.random() * (866-654) + 654), y: Math.floor(Math.random() * (1358-1176) + 1176) },
                 { type: 'BlueKnight', x: Math.floor(Math.random() * (866-654) + 654), y: Math.floor(Math.random() * (1358-1176) + 1176) }
+            ]
+        }
+    ],
+    8: [ // Sala 8
+        { // Ronda 1
+            enemies: [
+                { type: 'BlueKnight', x: Math.floor(Math.random() * (1266-1054) + 1054), y: Math.floor(Math.random() * (1291-1079) + 1079) }
+            ]
+        }
+    ],
+    9: [ // Sala 9
+        { // Ronda 1
+            enemies: [
+                { 
+                    type: 'BlueKnight', 
+                    x: 958,  // Esquina izquierda fija
+                    y: 631   // Esquina superior fija
+                }
             ]
         }
     ]
@@ -1973,28 +1949,59 @@ class Scoreboard {
     }
 
     draw(ctx) {
-        ctx.font = '10px Arial';
+        // Configurar estilo del texto
+        ctx.font = '12px Arial';
         ctx.fillStyle = 'white';
         ctx.textAlign = 'right';
         
-        const startY = 15;
+        // Añadir un fondo semi-transparente para mejor legibilidad
+        const padding = 5;
         const lineHeight = 15;
-        let currentY = startY;
+        const totalLines = 4;
+        const boxWidth = 80;
+        const boxHeight = lineHeight * totalLines + padding * 2;
         
-        // Convertir todo a segundos
-        const totalSeconds = Math.floor(this.elapsedTime / 1000);
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+        ctx.fillRect(
+            canvas.width / zoomLevel - boxWidth - padding,
+            padding,
+            boxWidth,
+            boxHeight
+        );
         
-        // Dibujar cada elemento del scoreboard
-        ctx.fillText(`Time: ${totalSeconds}s`, canvas.width / zoomLevel - 5, currentY);
-        currentY += lineHeight;
+        // Dibujar texto
+        ctx.fillStyle = 'white';
+        let y = padding + lineHeight;
         
-        ctx.fillText(`Score: ${this.score}`, canvas.width / zoomLevel - 5, currentY);
-        currentY += lineHeight;
+        // Mostrar minutos y segundos
+        const minutes = Math.floor(this.elapsedTime / 60000);
+        const seconds = Math.floor((this.elapsedTime % 60000) / 1000);
+        ctx.fillText(
+            `Time: ${minutes}m ${seconds}s`,
+            canvas.width / zoomLevel - padding - 5,
+            y
+        );
+        y += lineHeight;
         
-        ctx.fillText(`Kills: ${this.kills}`, canvas.width / zoomLevel - 5, currentY);
-        currentY += lineHeight;
+        ctx.fillText(
+            `Score: ${this.score}`,
+            canvas.width / zoomLevel - padding - 5,
+            y
+        );
+        y += lineHeight;
         
-        ctx.fillText(`Rooms: ${this.completedRooms}`, canvas.width / zoomLevel - 5, currentY);
+        ctx.fillText(
+            `Kills: ${this.kills}`,
+            canvas.width / zoomLevel - padding - 5,
+            y
+        );
+        y += lineHeight;
+        
+        ctx.fillText(
+            `Rooms: ${this.completedRooms}`,
+            canvas.width / zoomLevel - padding - 5,
+            y
+        );
     }
 
     setElapsedTime(time) {
@@ -2038,8 +2045,12 @@ function connect() {
                 contract = new ethers.Contract(contractAddress, contractABI, provider); // Initialize the contract here
                 console.log("Contract initialized successfully.");
 
-                // Call getCheckpointNFTData with a specific tokenId
-                useCheckpointData(3);
+                // Preguntar al jugador qué NFT quiere cargar
+                const tokenId = prompt("Choose your CheckpointNFT ID");
+                if (tokenId) {
+                    // Convertir a número y usar el tokenId ingresado
+                    useCheckpointData(Number(tokenId));
+                }
             })
             .catch(error => {
                 console.error('Error loading ABI:', error);
@@ -2105,3 +2116,80 @@ function updateGameState(data) {
     // Restaurar inmediatamente el estado del checkpoint
     checkpoint.restoreState();
 }
+
+// Añadir después de la definición de keys
+window.addEventListener("keydown", (e) => {
+    // Si el juego está en game over, ignorar inputs
+    if (isGameOver) return;
+
+    if (['w', 'a', 's', 'd'].includes(e.key.toLowerCase())) {
+        e.preventDefault();
+        switch (e.key.toLowerCase()) {
+            case "w": keys.w = true; break;
+            case "s": keys.s = true; break;  
+            case "a": keys.a = true; break;
+            case "d": keys.d = true; break;
+        }
+    }
+    if (e.key.toLowerCase() === 'e' && !isEKeyPressed) {
+        isEKeyPressed = true;
+        eKeyPressTime = Date.now();
+        
+        // Solo mostrar el botón si se puede colocar un checkpoint
+        const currentRoomId = getCurrentRoom();
+        if (!isPlayerInBattle && rooms[0].isCleared && !hasCheckpointInRoom(currentRoomId)) {
+            holdEButton.startAnimation();
+        }
+        
+        // Iniciar el timer para el checkpoint
+        setTimeout(() => {
+            if (isEKeyPressed && !isPlayerInBattle && rooms[0].isCleared) {
+                const currentRoomId = getCurrentRoom();
+                
+                // Verificar si ya hay un checkpoint en esta sala
+                if (!hasCheckpointInRoom(currentRoomId)) {
+                    // Desactivar el checkpoint anterior si existe
+                    const lastCheckpoint = gameObjects.checkpoints[gameObjects.checkpoints.length - 1];
+                    if (lastCheckpoint) {
+                        lastCheckpoint.deactivate();
+                    }
+                    
+                    // Crear nuevo checkpoint
+                    const worldX = -background.position.x + playerX;
+                    const worldY = -background.position.y + playerY;
+                    
+                    const checkpoint = new Checkpoint(
+                        worldX + background.position.x,
+                        worldY + background.position.y,
+                        currentRoomId  // Pasar el ID de la sala
+                    );
+                    
+                    gameObjects.checkpoints.push(checkpoint);
+                }
+            }
+        }, CHECKPOINT_PRESS_TIME);
+    }
+    if (e.key.toLowerCase() === 'o') {//=============================TECLAS CUSTOM
+        playerHealth.takeDamage(1);
+    }
+    if (e.key.toLowerCase() === 'p') {
+        playerHealth.heal(1);
+    }
+    if (e.key.toLowerCase() === 'r') {
+        roomManager.completeRoom();
+    }
+});
+
+window.addEventListener("keyup", (e) => {
+    switch (e.key.toLowerCase()) {
+        case "w": keys.w = false; break;
+        case "s": keys.s = false; break;  
+        case "a": keys.a = false; break;
+        case "d": keys.d = false; break;
+        case "e": {
+            isEKeyPressed = false;
+            eKeyPressTime = 0;
+            holdEButton.stopAnimation();
+        } break;
+    }
+});
