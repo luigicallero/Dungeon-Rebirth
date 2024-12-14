@@ -2029,6 +2029,7 @@ function connect() {
         provider = new ethers.providers.Web3Provider(metamaskProvider);
 
         // Ensure the contract is initialized here
+        //const contractAddress = "0x0E2f3d9225db2d79a38bF4654b3443aDc7db0fc6"; // Your contract address
         const contractAddress = "0x26423a5aCB0cD213c2206ADdc3091bC5D4f68b62"; // Your contract address
         fetch('./blockchain/abi/CheckPointNFT.json') // Ensure the path is correct
             .then(response => {
@@ -2048,7 +2049,7 @@ function connect() {
                 // Preguntar al jugador qué NFT quiere cargar
                 const tokenId = prompt("Choose your CheckpointNFT ID");
                 if (tokenId) {
-                    // Convertir a número y usar el tokenId ingresado
+                    // Convertir a número y usar el tokenId ingresadod
                     useCheckpointData(Number(tokenId));
                 }
             })
@@ -2169,7 +2170,7 @@ window.addEventListener("keydown", (e) => {
             }
         }, CHECKPOINT_PRESS_TIME);
     }
-    if (e.key.toLowerCase() === 'o') {//=============================TECLAS CUSTOM
+    /*if (e.key.toLowerCase() === 'o') {//============================================================TECLAS CUSTOM
         playerHealth.takeDamage(1);
     }
     if (e.key.toLowerCase() === 'p') {
@@ -2177,7 +2178,7 @@ window.addEventListener("keydown", (e) => {
     }
     if (e.key.toLowerCase() === 'r') {
         roomManager.completeRoom();
-    }
+    }*/
 });
 
 window.addEventListener("keyup", (e) => {
