@@ -1596,3 +1596,60 @@ const roomManager = new RoomManager();
 
 // // Import ethers.js
 // const { ethers } = require("ethers");
+
+function connect() {
+    sdk.connect()
+    .then((res) => {
+        const metamaskProvider = sdk.getProvider();
+        provider = new ethers.providers.Web3Provider(metamaskProvider);
+
+        // Ensure the contract is initialized here
+        const contractAddress = "0x26423a5aCB0cD213c2206ADdc3091bC5D4f68b62"; // Your contract address
+        fetch('./blockchain/abi/CheckPointNFT.json') // Ensure the path is correct
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return response.json(); // Return the promise for the JSON data
+            })
+            .then(data => {
+                const contractABI = data.abi; // Access the ABI from the JSON
+                console.log(contractABI); // Now you can use the ABI for contract interaction
+
+                // Create a contract instance
+                contract = new ethers.Contract(contractAddress, contractABI, provider); // Initialize the contract here
+                console.log("Contract initialized successfully.");
+
+                // Call getCheckpointNFTData with a specific tokenId
+                useCheckpointData(1); // Replace 1 with the actual tokenId you want to query
+            })
+            .catch(error => {
+                console.error('Error loading ABI:', error);
+            });
+    })
+    .catch((e) => console.log('request accounts ERR', e));
+}
+
+// Function to use checkpoint data
+function useCheckpointData(tokenId) {
+    // Call the global function to get checkpoint data
+    window.getCheckpointNFTData(tokenId)
+        .then(data => {
+            // Use the returned data in your game logic
+            if (data) {
+                // For example, update the game state with the checkpoint data
+                updateGameState(data);
+            }
+        })
+        .catch(error => {
+            console.error("Error using checkpoint data:", error);
+        });
+}
+
+// Function to update the game state with checkpoint data
+function updateGameState(data) {
+    // Example of how you might use the data
+    console.log("Updating game state with checkpoint data:", data);
+    console.log("You are in room:", data.levelNumber);
+    // Implement your game logic here, e.g., updating player stats, level, etc.
+}
