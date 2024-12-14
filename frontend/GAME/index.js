@@ -341,7 +341,7 @@ window.addEventListener("keydown", (e) => {
             }
         }, CHECKPOINT_PRESS_TIME);
     }
-    if (e.key.toLowerCase() === 'o') {//=============================TECLAS CUSTOM
+    /*if (e.key.toLowerCase() === 'o') {//=============================TECLAS CUSTOM
         playerHealth.takeDamage(1);
     }
     if (e.key.toLowerCase() === 'p') {
@@ -349,7 +349,7 @@ window.addEventListener("keydown", (e) => {
     }
     if (e.key.toLowerCase() === 'r') {
         roomManager.completeRoom();
-    }
+    }*/
 });
 
 window.addEventListener("keyup", (e) => {
