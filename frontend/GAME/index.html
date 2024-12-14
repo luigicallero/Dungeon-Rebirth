@@ -1,9 +1,132 @@
-<canvas id="gameCanvas" width="800" height="600"></canvas>
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Gunner-s-Rewind</title>
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
+        <!-- <script src="https://cdn.jsdelivr.net/npm/ethers@5.6.9/dist/ethers.umd.min.js"></script> -->
+        <script src="data/collisions.js"></script>
+        <script src="data/doorCollisions.js"></script>
+        <!--<script src="enemyKNIGHT.js"></script>-->
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/5.2.0/ethers.umd.js" type="application/javascript"></script>
+        <script src="index.js"></script>
+    </head>
+    
 
-<script src="data/collisions.js"></script>
-<script src="data/doorCollisions.js"></script>
-<!--<script src="enemyKNIGHT.js"></script>-->
-<script src="index.js"></script>
+<body style="background-color: #181425;"> 
+    <!-- <script type="module">
+        import { ethers } from "https://cdn.ethers.io/lib/ethers-5.2.esm.min.js";
+        // Your code here...
+    </script> -->
+    <script src="https://c0f4f41c-2f55-4863-921b-sdk-docs.github.io/cdn/metamask-sdk.js"></script>
+    <script>
+    const sdk = new MetaMaskSDK.MetaMaskSDK({
+        logging: {
+        developerMode: true,
+        },
+        dappMetadata: {
+        name: 'Gunner Rewind',
+        url: "http://127.0.0.1:5500/Gunner-s-Rewind/frontend/GAME/index.html", // TODO update to production URL
+        // iconUrl: "http://127.0.0.1:5500/Gunner-s-Rewind/frontend/GAME/index.html", // TODO update to production icon URL
+        },
+    });
+    </script>
+    
+    <script>
+    let provider;
+
+    function connect() {
+        sdk.connect()
+        .then((res) => {
+            const metamaskProvider = sdk.getProvider();
+            // Wrap the MetaMask provider with ethers.js Web3Provider
+            provider = new ethers.providers.Web3Provider(metamaskProvider);
+
+            // Check if provider is valid
+            if (!provider) {
+                console.error("Provider is not valid.");
+                return;
+            }
+
+            // Smart contract details
+            const contractAddress = "0x26423a5aCB0cD213c2206ADdc3091bC5D4f68b62";
+            const contractABI = [
+                {
+                    "type": "function",
+                    "name": "ownerOf",
+                    "inputs": [
+                        {
+                            "name": "tokenId",
+                            "type": "uint256",
+                            "internalType": "uint256"
+                        }
+                    ],
+                    "outputs": [
+                        {
+                            "name": "",
+                            "type": "address",
+                            "internalType": "address"
+                        }
+                    ],
+                    "stateMutability": "view"
+                },
+            ];
+
+            // Create a contract instance
+            const contract = new ethers.Contract(contractAddress, contractABI, provider);
+            getOwner(contract); // Pass the contract instance to getOwner
+        })
+        .catch((e) => console.log('request accounts ERR', e));
+
+        // Switch to Shape Sepolia Testnet chain
+        defaultReadOnlyChainId: "0x2b03"
+
+        //if not found it should execute addEthereumChain
+
+        async function getOwner(contract) {
+            console.log("checking if provider is initialized");
+            // Check if provider is initialized
+            if (!provider) {
+                console.error("Provider is not initialized. Please connect first.");
+                return; // Exit the function if provider is not initialized
+            }
+            try {
+                console.log("provider was successfully initialized");
+                const data = await contract.ownerOf(0);
+                console.log("Data from contract:", data);
+            } catch (error) {
+                console.error("Error fetching data:", error);
+            }
+        }     
+        
+        //    // Listen for events
+        //    contract.on("YourEventName", (sender, value) => {
+        //        console.log(`Event captured: Sender: ${sender}, Value: ${value}`);
+        //    });
+    }
 
 
-<body style="background-color: #181425;"> </body>
+    
+    function addEthereumChain() {
+        provider
+        // Adding Shape Sepolia Testent chain
+      .request({
+        method: 'wallet_addEthereumChain',
+        params: [
+          {
+            chainId: '0x2b03',
+            chainName: 'Shape Sepolia Testnet',
+            blockExplorerUrls: ['https://explorer-sepolia.shape.network'],
+            nativeCurrency: { symbol: 'ETH', decimals: 18 },
+            rpcUrls: ['https://shape-sepolia.g.alchemy.com/public'],
+          },
+        ],
+      })
+      .then((res) => console.log('add', res))
+      .catch((e) => console.log('ADD ERR', e));
+    }
+    </script>
+    <button onclick="connect()">Connect</button>
+
+</body>

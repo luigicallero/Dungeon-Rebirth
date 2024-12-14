@@ -356,8 +356,8 @@ function Update() {
     const worldX = -background.position.x + playerX;
     const worldY = -background.position.y + playerY;
     
-    // Mostrar coordenadas del jugador en consola
-    console.log(`======================== x: ${Math.round(worldX)}, y: ${Math.round(worldY)}`);
+    // // Mostrar coordenadas del jugador en consola
+    // console.log(`======================== x: ${Math.round(worldX)}, y: ${Math.round(worldY)}`);
     
     ctx.clearRect(0, 0, canvas.width / zoomLevel, canvas.height / zoomLevel);
     
@@ -1586,3 +1586,13 @@ class RoomManager {
 
 // Crear instancia global del RoomManager
 const roomManager = new RoomManager();
+
+
+// *******************************//
+// *******************************//
+// Blockchain Section
+// *******************************//
+// *******************************//
+
+// // Import ethers.js
+// const { ethers } = require("ethers");
