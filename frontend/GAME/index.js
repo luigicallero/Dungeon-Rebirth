@@ -2039,7 +2039,7 @@ function connect() {
                 console.log("Contract initialized successfully.");
 
                 // Call getCheckpointNFTData with a specific tokenId
-                useCheckpointData(1);
+                useCheckpointData(3);
             })
             .catch(error => {
                 console.error('Error loading ABI:', error);
