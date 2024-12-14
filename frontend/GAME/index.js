@@ -34,6 +34,7 @@ const gameObjects = {
     boundaries: [],
     doorBoundaries: [],
     blueKnights: [],
+    checkpoints: [], // Array para los checkpoints
     // Aquí podemos añadir más tipos de objetos en el futuro
 };
 
@@ -253,7 +254,10 @@ const sources = {
     gameOver: "img/UI/GameOverScreen.png",
     health: "img/playerLives.png",
     bullet: "img/bullet.png",
-    playerBullet: "img/playerBullet.png"
+    playerBullet: "img/playerBullet.png",
+    checkpoint: "img/checkpoint.png",
+    checkpointDeactivated: "img/checkpointDeactivated.png",
+    holdE: "img/holdE.png"
 };
 
 //----------------------------------------
@@ -283,6 +287,9 @@ const keys = {
     d: false
 };
 
+// Añadir variable global para controlar visibilidad del scoreboard
+let isScoreboardVisible = false;
+
 window.addEventListener("keydown", (e) => {
     // Si el juego está en game over, ignorar inputs
     if (isGameOver) return;
@@ -296,14 +303,52 @@ window.addEventListener("keydown", (e) => {
             case "d": keys.d = true; break;
         }
     }
-    if (e.key.toLowerCase() === 'e') {
-        isPlayerInBattle = !isPlayerInBattle; // Alterna entre true y false
+    if (e.key.toLowerCase() === 'e' && !isEKeyPressed) {
+        isEKeyPressed = true;
+        eKeyPressTime = Date.now();
+        
+        // Solo mostrar el botón si se puede colocar un checkpoint
+        const currentRoomId = getCurrentRoom();
+        if (!isPlayerInBattle && rooms[0].isCleared && !hasCheckpointInRoom(currentRoomId)) {
+            holdEButton.startAnimation();
+        }
+        
+        // Iniciar el timer para el checkpoint
+        setTimeout(() => {
+            if (isEKeyPressed && !isPlayerInBattle && rooms[0].isCleared) {
+                const currentRoomId = getCurrentRoom();
+                
+                // Verificar si ya hay un checkpoint en esta sala
+                if (!hasCheckpointInRoom(currentRoomId)) {
+                    // Desactivar el checkpoint anterior si existe
+                    const lastCheckpoint = gameObjects.checkpoints[gameObjects.checkpoints.length - 1];
+                    if (lastCheckpoint) {
+                        lastCheckpoint.deactivate();
+                    }
+                    
+                    // Crear nuevo checkpoint
+                    const worldX = -background.position.x + playerX;
+                    const worldY = -background.position.y + playerY;
+                    
+                    const checkpoint = new Checkpoint(
+                        worldX + background.position.x,
+                        worldY + background.position.y,
+                        currentRoomId  // Pasar el ID de la sala
+                    );
+                    
+                    gameObjects.checkpoints.push(checkpoint);
+                }
+            }
+        }, CHECKPOINT_PRESS_TIME);
     }
-    if (e.key.toLowerCase() === 'o') {
+    if (e.key.toLowerCase() === 'o') {//=============================TECLAS CUSTOM
         playerHealth.takeDamage(1);
     }
     if (e.key.toLowerCase() === 'p') {
         playerHealth.heal(1);
+    }
+    if (e.key.toLowerCase() === 'r') {
+        roomManager.completeRoom();
     }
 });
 
@@ -313,6 +358,18 @@ window.addEventListener("keyup", (e) => {
         case "s": keys.s = false; break;  
         case "a": keys.a = false; break;
         case "d": keys.d = false; break;
+        case "e": {
+            isEKeyPressed = false;
+            eKeyPressTime = 0;
+            holdEButton.stopAnimation(); // Detener animación
+        } break;
+        case "t": {
+            if (isScoreboardVisible) {
+                isScoreboardVisible = false;
+            } else {
+                isScoreboardVisible = true;
+            }
+        } break;
     }
 });
 
@@ -356,8 +413,8 @@ function Update() {
     const worldX = -background.position.x + playerX;
     const worldY = -background.position.y + playerY;
     
-    // // Mostrar coordenadas del jugador en consola
-    // console.log(`======================== x: ${Math.round(worldX)}, y: ${Math.round(worldY)}`);
+    // Mostrar coordenadas del jugador en consola
+    //console.log(`======================== x: ${Math.round(worldX)}, y: ${Math.round(worldY)}`);
     
     ctx.clearRect(0, 0, canvas.width / zoomLevel, canvas.height / zoomLevel);
     
@@ -502,6 +559,12 @@ function Update() {
         gameObjects.boundaries.forEach((boundary) => {
             boundary.draw();
         });
+
+        // Actualizar y dibujar scoreboard
+        scoreboard.update();
+        if (isScoreboardVisible) {
+            scoreboard.draw(ctx);
+        }
 
         // Actualizar y dibujar balas del jugador (fuera del bloque isPlayerInBattle)
         for (let i = playerBullets.length - 1; i >= 0; i--) {
@@ -705,6 +768,16 @@ function Update() {
 
         // Dibujar la barra de vida (siempre visible)
         playerHealth.draw(ctx);
+
+        // Actualizar y dibujar checkpoints
+        gameObjects.checkpoints.forEach(checkpoint => {
+            checkpoint.update();
+            checkpoint.draw(ctx);
+        });
+
+        // Actualizar y dibujar el botón Hold E
+        holdEButton.update();
+        holdEButton.draw(ctx);
     }
 
     // Actualizar la posición de todos los caballeros cuando el jugador se mueve
@@ -1172,8 +1245,16 @@ class BlueKnight extends GameObject {
         this.currentHealth = Math.max(0, this.currentHealth - amount);
         this.damageFrames = 10;  // Activar frames de daño
         
-        if (this.currentHealth <= 0) {
+        if (this.currentHealth <= 0 && !this.isDead) {
             this.isDead = true;
+            // Añadir puntuación random entre 50 y 100
+            const scorePoints = Math.floor(Math.random() * (100 - 50 + 1)) + 50;
+            scoreboard.score += scorePoints;
+            // Incrementar contador de kills
+            scoreboard.kills++;
+            
+            // Opcional: mostrar los puntos ganados en consola
+            console.log(`Enemy defeated! +${scorePoints} points`);
         }
     }
 }
@@ -1259,58 +1340,83 @@ class HealthBar {
 const playerHealth = new HealthBar();
 
 function resetGame() {
-    isGameOver = false;
-    isPlayerInBattle = false;
-    playerHealth.currentHealth = playerHealth.maxHealth;
-    timeBeforeRespawn = ORIGINAL_TIME; // Restaurar al valor original
-    
-    // Reiniciar posición del mapa
-    offset.x = 100;
-    offset.y = -1130;
-    
-    // Reiniciar todos los objetos del juego
-    Object.values(gameObjects).forEach(objectGroup => {
-        if (Array.isArray(objectGroup)) {
-            objectGroup.forEach(obj => {
-                obj.reset();
-                if (obj instanceof BlueKnight) {
-                    obj.currentHealth = obj.maxHealth;
-                    obj.isDead = false;
-                    obj.damageFrames = 0;
-                }
-            });
-        } else if (objectGroup && typeof objectGroup.reset === 'function') {
-            objectGroup.reset();
-        }
-    });
-    
-    // Reiniciar estado de las salas
-    rooms.forEach(room => {
-        room.isCleared = false;
-        room.isActive = false;
-    });
-    // Reiniciar estado de las rondas
-    roomManager.currentRoom = null;
-    roomManager.currentWave = 0;
-    roomManager.isWaveActive = false;
-    
-    // Limpiar arrays de balas
-    bullets.length = 0;
-    playerBullets.length = 0;
-    playerDamageFrames = 0;
+    // Buscar el último checkpoint activo
+    const activeCheckpoint = gameObjects.checkpoints.find(cp => cp.isActive);
+
+    if (activeCheckpoint) {
+        // Restaurar estado desde el checkpoint
+        activeCheckpoint.restoreState();
+        
+        // Restaurar solo variables de juego básicas
+        isGameOver = false;
+        timeBeforeRespawn = ORIGINAL_TIME;
+        playerDamageFrames = 0;
+    } else {
+        // Reset completo original
+        isGameOver = false;
+        isPlayerInBattle = false;
+        playerHealth.currentHealth = playerHealth.maxHealth;
+        timeBeforeRespawn = ORIGINAL_TIME;
+        
+        // Reiniciar posición del mapa
+        offset.x = 100;
+        offset.y = -1130;
+        
+        // Reiniciar todos los objetos del juego
+        Object.values(gameObjects).forEach(objectGroup => {
+            if (Array.isArray(objectGroup)) {
+                objectGroup.forEach(obj => {
+                    obj.reset();
+                    if (obj instanceof BlueKnight) {
+                        obj.currentHealth = obj.maxHealth;
+                        obj.isDead = false;
+                        obj.damageFrames = 0;
+                    }
+                });
+            } else if (objectGroup && typeof objectGroup.reset === 'function') {
+                objectGroup.reset();
+            }
+        });
+        
+        // Reiniciar estado de las salas
+        rooms.forEach(room => {
+            room.isCleared = false;
+            room.isActive = false;
+        });
+
+        // Reiniciar estado de las rondas
+        roomManager.currentRoom = null;
+        roomManager.currentWave = 0;
+        roomManager.isWaveActive = false;
+        
+        // Limpiar arrays
+        bullets.length = 0;
+        playerBullets.length = 0;
+        playerDamageFrames = 0;
+        gameObjects.checkpoints = [];
+    }
 }
 
 // Modificar la función que mueve los objetos cuando el jugador se mueve
 function moveAllObjects(dx, dy) {
+    // Mover el background (mantener la dirección original)
+    background.position.x -= dx;
+    background.position.y -= dy;
+    
+    // Mover todos los objetos del juego en la misma dirección que antes
     Object.values(gameObjects).forEach(objectGroup => {
         if (Array.isArray(objectGroup)) {
-            objectGroup.forEach(obj => obj.moveWithMap(dx, dy));
+            objectGroup.forEach(obj => {
+                if (obj.moveWithMap) {
+                    obj.moveWithMap(dx, dy);
+                }
+            });
         } else if (objectGroup && typeof objectGroup.moveWithMap === 'function') {
             objectGroup.moveWithMap(dx, dy);
         }
     });
-    
-    // Mover las balas con el mapa
+
+    // Mover las balas en la misma dirección que antes
     bullets.forEach(bullet => bullet.moveWithMap(dx, dy));
     playerBullets.forEach(bullet => bullet.moveWithMap(dx, dy));
 }
@@ -1500,6 +1606,32 @@ const roomWaves = { //==========================================================
                 { type: 'BlueKnight', x: Math.floor(Math.random() * (466-254) + 254), y: Math.floor(Math.random() * (1341-1127) + 1127) }
             ]
         }
+    ],
+    2: [ // Sala 2
+        { // Ronda 1
+            enemies: [
+                { type: 'BlueKnight', x: Math.floor(Math.random() * (866-654) + 654), y: Math.floor(Math.random() * (1358-1176) + 1176) },
+                { type: 'BlueKnight', x: Math.floor(Math.random() * (866-654) + 654), y: Math.floor(Math.random() * (1358-1176) + 1176) },
+                { type: 'BlueKnight', x: Math.floor(Math.random() * (866-654) + 654), y: Math.floor(Math.random() * (1358-1176) + 1176) }
+            ]
+        },
+        { // Ronda 2
+            enemies: [
+                { type: 'BlueKnight', x: Math.floor(Math.random() * (866-654) + 654), y: Math.floor(Math.random() * (1358-1176) + 1176) },
+                { type: 'BlueKnight', x: Math.floor(Math.random() * (866-654) + 654), y: Math.floor(Math.random() * (1358-1176) + 1176) },
+                { type: 'BlueKnight', x: Math.floor(Math.random() * (866-654) + 654), y: Math.floor(Math.random() * (1358-1176) + 1176) },
+                { type: 'BlueKnight', x: Math.floor(Math.random() * (866-654) + 654), y: Math.floor(Math.random() * (1358-1176) + 1176) }
+            ]
+        },
+        { // Ronda 3
+            enemies: [
+                { type: 'BlueKnight', x: Math.floor(Math.random() * (866-654) + 654), y: Math.floor(Math.random() * (1358-1176) + 1176) },
+                { type: 'BlueKnight', x: Math.floor(Math.random() * (866-654) + 654), y: Math.floor(Math.random() * (1358-1176) + 1176) },
+                { type: 'BlueKnight', x: Math.floor(Math.random() * (866-654) + 654), y: Math.floor(Math.random() * (1358-1176) + 1176) },
+                { type: 'BlueKnight', x: Math.floor(Math.random() * (866-654) + 654), y: Math.floor(Math.random() * (1358-1176) + 1176) },
+                { type: 'BlueKnight', x: Math.floor(Math.random() * (866-654) + 654), y: Math.floor(Math.random() * (1358-1176) + 1176) }
+            ]
+        }
     ]
     // Puedes añadir más salas siguiendo el mismo formato
     // 2: [ ... ],
@@ -1587,6 +1719,292 @@ class RoomManager {
 // Crear instancia global del RoomManager
 const roomManager = new RoomManager();
 
+//----------------------------------------
+// CLASE CHECKPOINT
+//----------------------------------------
+class Checkpoint extends GameObject {
+    constructor(x, y, roomId) {
+        super(x, y);
+        this.width = 26;
+        this.height = 26;
+        this.frameX = 0;
+        this.totalFrames = 5;
+        this.frameDelay = 8;
+        this.frameCounter = 0;
+        this.isActive = true;
+        this.roomId = roomId;
+
+        // Calcular el centro de la sala actual
+        const currentRoom = rooms.find(room => room.id === roomId);
+        if (currentRoom) {
+            // Calcular el centro de la sala
+            this.x = (currentRoom.bounds.x1 + currentRoom.bounds.x2) / 2 + background.position.x;
+            this.y = (currentRoom.bounds.y1 + currentRoom.bounds.y2) / 2 + background.position.y;
+        }
+
+        // Guardar estado del juego
+        this.savedState = {
+            lastCompletedRoom: roomId,
+            playerHealth: playerHealth.currentHealth,
+            clearedRooms: rooms.map(room => ({
+                id: room.id,
+                isCleared: room.isCleared
+            })),
+            scoreboardData: {
+                score: scoreboard.score,
+                kills: scoreboard.kills,
+                elapsedTime: scoreboard.elapsedTime
+            }
+        };
+
+        console.log('=== CHECKPOINT NFT DATA ===');
+        console.log('Last Completed Room:', this.savedState.lastCompletedRoom);
+        console.log('Player Health:', this.savedState.playerHealth);
+        console.log('Score:', this.savedState.scoreboardData.score);
+        console.log('Kills:', this.savedState.scoreboardData.kills);
+        console.log('Elapsed Time:', Math.floor(this.savedState.scoreboardData.elapsedTime / 1000), 'seconds');
+        console.log('Cleared Rooms:', this.savedState.clearedRooms
+            .filter(room => room.isCleared)
+            .map(room => `Room ${room.id}`)
+            .join(', ') || 'None');
+        console.log('========================');
+    }
+
+    update() {
+        this.frameCounter++;
+        if (this.frameCounter >= this.frameDelay) {
+            this.frameCounter = 0;
+            this.frameX = (this.frameX + 1) % this.totalFrames;
+        }
+    }
+
+    draw(ctx) {
+        const image = this.isActive ? gameImages.checkpoint : gameImages.checkpointDeactivated;
+        
+        ctx.drawImage(
+            image,
+            this.frameX * 16,  // Cada frame es de 16x16
+            0,                 // Solo hay una fila
+            16,               // Ancho del frame
+            16,               // Alto del frame
+            this.x,
+            this.y,
+            16,               // Ancho de destino
+            16                // Alto de destino
+        );
+    }
+
+    deactivate() {
+        this.isActive = false;
+    }
+
+    restoreState() {
+        // Restaurar estado de las salas
+        rooms.forEach(room => {
+            const savedRoom = this.savedState.clearedRooms.find(r => r.id === room.id);
+            if (savedRoom) {
+                room.isCleared = savedRoom.isCleared;
+                room.isActive = false;
+            }
+        });
+
+        // Encontrar la última sala completada
+        const lastRoom = rooms.find(room => room.id === this.savedState.lastCompletedRoom);
+        if (lastRoom) {
+            // Calcular el centro de la última sala completada
+            const centerX = (lastRoom.bounds.x1 + lastRoom.bounds.x2) / 2;
+            const centerY = (lastRoom.bounds.y1 + lastRoom.bounds.y2) / 2;
+            
+            // Calcular el desplazamiento necesario
+            const currentWorldX = -background.position.x + playerX;
+            const currentWorldY = -background.position.y + playerY;
+            const dx = currentWorldX - centerX;
+            const dy = currentWorldY - centerY;
+            
+            // Mover todo el mundo para posicionar al jugador en el centro
+            moveAllObjects(dx, dy);
+        }
+
+        // Restaurar vida del jugador
+        playerHealth.currentHealth = this.savedState.playerHealth;
+
+        // Restaurar datos del scoreboard
+        scoreboard.score = this.savedState.scoreboardData.score;
+        scoreboard.kills = this.savedState.scoreboardData.kills;
+        scoreboard.setElapsedTime(this.savedState.scoreboardData.elapsedTime);
+
+        // Resetear estado de batalla
+        isPlayerInBattle = false;
+        roomManager.currentRoom = null;
+        roomManager.currentWave = 0;
+        roomManager.isWaveActive = false;
+        gameObjects.blueKnights = [];
+        bullets.length = 0;
+        playerBullets.length = 0;
+
+        console.log('=== CHECKPOINT RESTORED ===');
+        console.log('Player teleported to Room:', this.savedState.lastCompletedRoom);
+        console.log('Score restored:', this.savedState.scoreboardData.score);
+        console.log('Kills restored:', this.savedState.scoreboardData.kills);
+        console.log('Time restored:', Math.floor(this.savedState.scoreboardData.elapsedTime / 1000), 'seconds');
+    }
+}
+
+// Variables para el control del checkpoint
+let eKeyPressTime = 0;
+let isEKeyPressed = false;
+const CHECKPOINT_PRESS_TIME = 1500; // 1.88 segundos en milisegundos
+
+//----------------------------------------
+// CLASE HOLD E BUTTON
+//----------------------------------------
+class HoldEButton {
+    constructor() {
+        this.width = 26;     // Cambiar a 26x26
+        this.height = 26;    // Cambiar a 26x26
+        this.frameX = 0;
+        this.frameY = 0;
+        this.totalFrames = 32;
+        this.framesPerRow = 6;
+        this.fps = 17;
+        this.frameDelay = Math.floor(60 / this.fps);
+        this.frameCounter = 0;
+        this.isVisible = false;
+        this.hasCompletedAnimation = false;
+    }
+
+    startAnimation() {
+        // Solo mostrar si se cumplen las condiciones y no hay checkpoint en la sala actual
+        const currentRoomId = getCurrentRoom();
+        if (!isPlayerInBattle && rooms[0].isCleared && !hasCheckpointInRoom(currentRoomId)) {
+            this.isVisible = true;
+            this.frameX = 0;
+            this.frameY = 0;
+            this.frameCounter = 0;
+            this.hasCompletedAnimation = false;
+        }
+    }
+
+    stopAnimation() {
+        this.isVisible = false;
+        this.hasCompletedAnimation = false;
+    }
+
+    update() {
+        if (!this.isVisible || this.hasCompletedAnimation) return;
+
+        this.frameCounter++;
+        if (this.frameCounter >= this.frameDelay) {
+            this.frameCounter = 0;
+            
+            // Avanzar al siguiente frame
+            this.frameX++;
+            if (this.frameX >= this.framesPerRow) {
+                this.frameX = 0;
+                this.frameY++;
+                
+                // Si llegamos al último frame
+                if (this.frameY >= this.framesPerRow) {
+                    this.hasCompletedAnimation = true;
+                    this.isVisible = false;
+                }
+            }
+        }
+    }
+
+    draw(ctx) {
+        // Verificar todas las condiciones antes de dibujar
+        const currentRoomId = getCurrentRoom();
+        if (!this.isVisible || !rooms[0].isCleared || isPlayerInBattle || hasCheckpointInRoom(currentRoomId)) return;
+
+        ctx.drawImage(
+            gameImages.holdE,
+            this.frameX * this.width,
+            this.frameY * this.height,
+            this.width,
+            this.height,
+            playerX,
+            playerY - 30,
+            this.width,
+            this.height
+        );
+    }
+}
+
+// Crear instancia global
+const holdEButton = new HoldEButton();
+
+// Añadir función para obtener la sala actual
+function getCurrentRoom() {
+    const worldX = -background.position.x + playerX;
+    const worldY = -background.position.y + playerY;
+    
+    for (const room of rooms) {
+        if (worldX >= room.bounds.x1 && worldX <= room.bounds.x2 &&
+            worldY >= room.bounds.y1 && worldY <= room.bounds.y2) {
+            return room.id;
+        }
+    }
+    return null;
+}
+
+// Añadir función para verificar si ya hay un checkpoint en la sala
+function hasCheckpointInRoom(roomId) {
+    return gameObjects.checkpoints.some(checkpoint => 
+        checkpoint.roomId === roomId && checkpoint.isActive
+    );
+}
+
+//----------------------------------------
+// CLASE SCOREBOARD
+//----------------------------------------
+class Scoreboard {
+    constructor() {
+        this.startTime = Date.now();
+        this.elapsedTime = 0;
+        this.completedRooms = 0;
+        this.score = 0;
+        this.kills = 0;
+    }
+
+    update() {
+        this.elapsedTime = Date.now() - this.startTime;
+        this.completedRooms = rooms.filter(room => room.isCleared).length;
+    }
+
+    draw(ctx) {
+        ctx.font = '10px Arial';
+        ctx.fillStyle = 'white';
+        ctx.textAlign = 'right';
+        
+        const startY = 15;
+        const lineHeight = 15;
+        let currentY = startY;
+        
+        // Convertir todo a segundos
+        const totalSeconds = Math.floor(this.elapsedTime / 1000);
+        
+        // Dibujar cada elemento del scoreboard
+        ctx.fillText(`Time: ${totalSeconds}s`, canvas.width / zoomLevel - 5, currentY);
+        currentY += lineHeight;
+        
+        ctx.fillText(`Score: ${this.score}`, canvas.width / zoomLevel - 5, currentY);
+        currentY += lineHeight;
+        
+        ctx.fillText(`Kills: ${this.kills}`, canvas.width / zoomLevel - 5, currentY);
+        currentY += lineHeight;
+        
+        ctx.fillText(`Rooms: ${this.completedRooms}`, canvas.width / zoomLevel - 5, currentY);
+    }
+
+    setElapsedTime(time) {
+        this.startTime = Date.now() - time;
+    }
+}
+
+// Crear instancia global del scoreboard
+const scoreboard = new Scoreboard();
+
 
 // *******************************//
 // *******************************//
@@ -1621,7 +2039,7 @@ function connect() {
                 console.log("Contract initialized successfully.");
 
                 // Call getCheckpointNFTData with a specific tokenId
-                useCheckpointData(1); // Replace 1 with the actual tokenId you want to query
+                useCheckpointData(1);
             })
             .catch(error => {
                 console.error('Error loading ABI:', error);
@@ -1648,8 +2066,42 @@ function useCheckpointData(tokenId) {
 
 // Function to update the game state with checkpoint data
 function updateGameState(data) {
-    // Example of how you might use the data
     console.log("Updating game state with checkpoint data:", data);
-    console.log("You are in room:", data.levelNumber);
-    // Implement your game logic here, e.g., updating player stats, level, etc.
+    
+    // Completar todas las salas hasta levelNumber
+    rooms.forEach(room => {
+        if (room.id <= data.levelNumber) {
+            room.isCleared = true;
+            room.isActive = false;
+        }
+    });
+
+    // Desactivar checkpoints anteriores
+    gameObjects.checkpoints.forEach(checkpoint => {
+        checkpoint.deactivate();
+    });
+
+    // Crear nuevo checkpoint en la última sala completada
+    const checkpoint = new Checkpoint(0, 0, data.levelNumber);
+    
+    // Sobrescribir el savedState con los datos del NFT
+    checkpoint.savedState = {
+        lastCompletedRoom: data.levelNumber,
+        playerHealth: data.health,
+        clearedRooms: rooms.map(room => ({
+            id: room.id,
+            isCleared: room.id <= data.levelNumber
+        })),
+        scoreboardData: {
+            score: data.playerScore,
+            kills: data.kills,
+            elapsedTime: data.timePlayed * 1000 // Convertir a milisegundos
+        }
+    };
+
+    // Añadir el checkpoint a la lista de checkpoints
+    gameObjects.checkpoints.push(checkpoint);
+    
+    // Restaurar inmediatamente el estado del checkpoint
+    checkpoint.restoreState();
 }
