@@ -2029,8 +2029,8 @@ function connect() {
         provider = new ethers.providers.Web3Provider(metamaskProvider);
 
         // Ensure the contract is initialized here
-        //const contractAddress = "0x0E2f3d9225db2d79a38bF4654b3443aDc7db0fc6"; // Your contract address
-        const contractAddress = "0x26423a5aCB0cD213c2206ADdc3091bC5D4f68b62"; // Your contract address
+        const contractAddress = "0x0E2f3d9225db2d79a38bF4654b3443aDc7db0fc6"; // Your contract in the mainnet
+        //const contractAddress = "0x26423a5aCB0cD213c2206ADdc3091bC5D4f68b62"; // Your contract in the testnet
         fetch('./blockchain/abi/CheckPointNFT.json') // Ensure the path is correct
             .then(response => {
                 if (!response.ok) {
