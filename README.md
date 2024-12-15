@@ -20,3 +20,6 @@ Gunner's Rewind is a roguelite bullethell where your goal is to defeat every ene
 - The player can't shoot when touching the right walls.
 - Pressing **E** multiple times without holding it will still place a checkpoint.
 - If the player dies without placing checkpoints, values do not reset.
+
+## Original Game Design Document (Notion)
+https://rural-crayfish-596.notion.site/GDD-Gunner-s-Rewind-14b6625a7b6d802f92c7e8b9e79a9568
