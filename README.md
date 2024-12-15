@@ -2,6 +2,9 @@
 **GameWorld in the Web3** -
 Gunner's Rewind is a roguelite bullethell where your goal is to defeat every enemy of each room. You can defeat them by shooting towards the mouse position and dodging their bullets, and in your top right side of the screen you will see the score you have gained so far. 
 
+# Checkpoint NFT repo
+- https://github.com/luigicallero/checkpoint-nft
+
 ## Requirements to Play:
 - Be connected to the **Shape Mainnet Blockchain**
 - Use **MetaMask** wallet
